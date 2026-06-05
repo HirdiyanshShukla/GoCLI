@@ -175,14 +175,13 @@ jenkins:
 				core.ExecCommand(
 					"Installing Jenkins Plugins (Takes ~2 min)",
 					false,
-					true, // Set to true to see progress
+					false, // Set to true to see progress
 					"docker", "exec",
 					"-e", "JENKINS_UC_DOWNLOAD_TIMEOUT=60",
 					"-e", "CURL_CONNECTION_TIMEOUT=60",
 					"-e", "JENKINS_UC_DOWNLOAD=https://mirrors.tuna.tsinghua.edu.cn/jenkins",
 					jenkinsName,
 					"jenkins-plugin-cli",
-                    "--verbose",
 					"--plugins",
 					"git",
 					"workflow-aggregator",
