@@ -28,8 +28,6 @@ var tunnelCmd = &cobra.Command{
 
 		namespace := appName + "-ns"
 
-		fmt.Println("\033[1;36m🔄 Patching Kubeconfig for Local Terminal (Native)...\033[0m")
-		patchKubeConfig("host.docker.internal", "127.0.0.1")
 
 		fmt.Printf("\033[1;36m🌍 Opening a direct tunnel to '%s'...\033[0m\n", appName)
 		fmt.Println("\033[1;32m👉 App will be live at: http://localhost:8081\033[0m")

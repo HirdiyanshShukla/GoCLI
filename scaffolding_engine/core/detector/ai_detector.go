@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"pipeline-cli/core/ai"
+	"pipeline-cli/scaffolding_engine/core/rules"
 )
 
 // AIDetectionResult holds all variables returned by AI framework detection.
@@ -94,29 +95,40 @@ func AIDetectFramework(projectPath string) (AIDetectionResult, error) {
 		return result, fmt.Errorf("failed to read project: %w", err)
 	}
 
-	systemPrompt := `You are a platform engineering assistant for a DevOps CLI tool.
+	rulesData, err := rules.Files.ReadFile("rules.yaml")
+	if err != nil {
+		return result, fmt.Errorf("failed to read rules.yaml: %w", err)
+	}
+
+	pkgManager := DetectPackageManager(projectPath)
+
+	systemPrompt := fmt.Sprintf(`You are a platform engineering assistant for a DevOps CLI tool.
 Your job is to analyze a project's file structure and key file contents, then identify the framework and return scaffolding variables.
-You MUST respond with ONLY valid JSON.
-The JSON must exactly match this structure:
+
+Here are the platform rules:
+%s
+
+DETECTION ALGORITHM & RESERVED NAMES:
+The following framework names are RESERVED: 'react', 'expressjs', 'django', 'fastapi', 'java_springboot'.
+
+Step 1: Evaluate the 'exact_match_templates' from the rules.
+Step 2: If the project strictly matches one of the templates, the "framework" key MUST equal that exact reserved template string.
+Step 3: If no exact template matches, you MUST NOT return a reserved name. Instead, return the actual framework or runtime name (e.g., 'nextjs', 'go', 'nestjs', 'python').
+Step 4: Never invent template names. 
+
+You MUST respond with ONLY valid JSON matching this exact structure:
 {
-  "framework": "string (e.g. golang, ruby, rust, dotnet, laravel)",
-  "runtime": "string (e.g. go, ruby, rust, dotnet, php)",
-  "entry_path": "string (main entry file path relative to project root, empty if not applicable)",
+  "framework": "string",
+  "runtime": "string",
+  "entry_path": "string (main entry file path relative to project root)",
   "app_port": number (the port this app listens on),
-  "health_path": "string (health check HTTP path, e.g. /health, /healthz, /actuator/health, /ping)",
-  "test_command": "string (command to run tests, e.g. 'go test ./...', 'bundle exec rspec')",
-  "test_image": "string (Docker image for running tests, e.g. 'golang:1.22-alpine', 'ruby:3.3-alpine')",
-  "run_command": "string (CMD for Dockerfile as JSON array string, e.g. '[\"./main\"]')"
-}
-Rules:
-- app_port must be a realistic port for the detected framework
-- health_path must reflect what the framework actually uses
-- test_image must be a real Docker image that exists on Docker Hub
-- run_command must be a valid JSON array formatted as a string`
+  "health_path": "string (health check HTTP path, e.g., /health, /ping)",
+  "test_command": "string (command to run tests)",
+  "test_image": "string (Docker image for running tests)",
+  "run_command": "string (CMD for Dockerfile as JSON array string, e.g., '[\"./main\"]')"
+}`, string(rulesData))
 
-	userMessage := fmt.Sprintf("Analyze this project and return the scaffolding variables as JSON:\n\n%s", snapshot)
-
-	fmt.Println("\033[1;36m🤖 Unknown framework detected. Consulting AI for identification...\033[0m")
+	userMessage := fmt.Sprintf("DETERMINISTIC FACTS:\nDetected package manager: %s\n\nAnalyze this project snapshot and return the JSON:\n\n%s", pkgManager, snapshot)
 
 	responseText, err := client.Complete(systemPrompt, userMessage)
 	if err != nil {
@@ -138,9 +150,6 @@ Rules:
 	}
 	if result.AppPort == 0 {
 		result.AppPort = 8080 // safe fallback
-	}
-	if result.HealthPath == "" {
-		result.HealthPath = "/health"
 	}
 
 	fmt.Printf("\033[1;32m✓\033[0m AI identified framework: %s (port %d)\n", result.Framework, result.AppPort)

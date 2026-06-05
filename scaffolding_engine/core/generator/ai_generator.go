@@ -39,7 +39,8 @@ func AIGenerateDockerfile(projectPath string, vars map[string]interface{}) (AIGe
 	}
 
 	systemPrompt := fmt.Sprintf(`You are a platform engineering assistant generating a production-grade Dockerfile.
-You MUST follow these platform standards exactly — they are non-negotiable security and reliability requirements:
+You MUST follow these platform standards exactly — they are non-negotiable security and reliability requirements.
+Pay extreme attention to the "prompt_instructions.dockerfile_generation_phase" and "framework_profiles" sections:
 
 %s
 

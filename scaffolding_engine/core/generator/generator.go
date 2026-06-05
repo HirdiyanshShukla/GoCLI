@@ -121,6 +121,18 @@ func GenerateFiles(framework string, projectPath string, entryPath string, aiRes
 		}
 	}
 
+	// --- ABSOLUTE SAFETY FALLBACK ---
+	// If the AI returns an empty image (e.g., no tests found), default to alpine
+	// so the pipeline doesn't crash on a <no value> template evaluation.
+	if finalVars["test_image"] == nil || finalVars["test_image"] == "" {
+		finalVars["test_image"] = "alpine:3.19"
+	}
+
+	// ADD THIS: Ensure health_path never goes to the template as nil
+	if finalVars["health_path"] == nil || finalVars["health_path"] == "" {
+		finalVars["health_path"] = "/"
+	}
+
 	// ── 4. Generate Dockerfile via AI only if no template exists ─────────────
 	// Known frameworks (react, django, etc.) already have Dockerfile.tmpl — skip AI.
 	// Only call AIGenerateDockerfile for truly unknown frameworks.

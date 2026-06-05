@@ -90,8 +90,8 @@ containerdConfigPatches:
             "docker", "network", "connect", "kind", "local-registry",
         )
  
-        fmt.Println("\033[1;36m🔄 Patching Kubeconfig for Jenkins (Native)...\033[0m")
-        patchKubeConfig("127.0.0.1", "host.docker.internal")
+        fmt.Println("\033[1;36m🔄 Generating isolated Kubeconfig for Jenkins...\033[0m")
+        generateJenkinsKubeConfig(cwd)
  
         // JCasC
         cascYaml := `
@@ -171,36 +171,43 @@ jenkins:
                     `curl -sSL "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash && mv kustomize /usr/local/bin/`,
                 )
  
-                core.ExecCommand(
-                    "Installing Jenkins Plugins (Takes ~2 min)",
-                    false,
-                    false,
-                    "docker", "exec",
-                    jenkinsName,
-                    "jenkins-plugin-cli",
-                    "--plugins",
-                    "git",
-                    "workflow-aggregator",
-                    "docker-workflow",
-                    "configuration-as-code",
-                    "ws-cleanup",
-                )
- 
-                core.ExecCommand(
-                    "Injecting JCasC Configuration",
-                    true,
-                    false,
-                    "docker", "cp",
-                    cascFile.Name(),
-                    fmt.Sprintf("%s:/var/jenkins_home/casc.yaml", jenkinsName),
-                )
- 
-                core.ExecCommand(
-                    "Applying configurations",
-                    false,
-                    true,
-                    "docker", "restart", jenkinsName,
-                )
+// 1. Install Plugins (with speed fixes!)
+				core.ExecCommand(
+					"Installing Jenkins Plugins (Takes ~2 min)",
+					false,
+					true, // Set to true to see progress
+					"docker", "exec",
+					"-e", "JENKINS_UC_DOWNLOAD_TIMEOUT=60",
+					"-e", "CURL_CONNECTION_TIMEOUT=60",
+					"-e", "JENKINS_UC_DOWNLOAD=https://mirrors.tuna.tsinghua.edu.cn/jenkins",
+					jenkinsName,
+					"jenkins-plugin-cli",
+                    "--verbose",
+					"--plugins",
+					"git",
+					"workflow-aggregator",
+					"docker-workflow",
+					"configuration-as-code",
+					"ws-cleanup",
+				)
+
+				// 2. Inject Configuration
+				core.ExecCommand(
+					"Injecting JCasC Configuration",
+					true,
+					false,
+					"docker", "cp",
+					cascFile.Name(),
+					fmt.Sprintf("%s:/var/jenkins_home/casc.yaml", jenkinsName),
+				)
+
+				// 3. Restart to apply BOTH plugins and configuration
+				core.ExecCommand(
+					"Applying plugins and configurations",
+					false,
+					true,
+					"docker", "restart", jenkinsName,
+				)
  
                 fmt.Println("\033[33m⏳ Waiting for Jenkins to fully boot...\033[0m")
  
@@ -213,108 +220,22 @@ jenkins:
                     "bash", "-c",
                     `until curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/login | grep -q "200"; do sleep 3; done`,
                 )
- 
-                fmt.Println("\n\033[1;36m🤖 Automating Pushless Jenkins Pipeline...\033[0m")
- 
-                // READ LOCAL JENKINSFILE
-                jenkinsfileBytes, err := os.ReadFile("Jenkinsfile")
- 
-                if err != nil {
- 
-                    fmt.Println("\033[31m⚠️ No Jenkinsfile found in current directory. Cannot auto-create job.\033[0m")
- 
-                } else {
- 
-                    scriptContent := fmt.Sprintf("<![CDATA[%s]]>", string(jenkinsfileBytes))
- 
-                    jobXML := fmt.Sprintf(`<?xml version='1.1' encoding='UTF-8'?>
-<flow-definition plugin="workflow-job">
-  <definition class="org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition" plugin="workflow-cps">
-    <script>%s</script>
-    <sandbox>true</sandbox>
-  </definition>
-</flow-definition>`, scriptContent)
- 
-                    xmlFile, _ := os.CreateTemp("", "job-*.xml")
-                    defer os.Remove(xmlFile.Name())
- 
-                    xmlFile.WriteString(jobXML)
-                    xmlFile.Close()
- 
-                    apiScript := fmt.Sprintf(`#!/bin/bash
-set -e
- 
-CRUMB=$(curl -s -c /tmp/cookies.txt -u admin:admin "http://localhost:8080/crumbIssuer/api/xml?xpath=concat(//crumbRequestField,\":\",//crumb)")
- 
-curl -s -X POST "http://localhost:8080/job/%s/doDelete" \
--u admin:admin \
--b /tmp/cookies.txt \
--H "$CRUMB" || true
- 
-sleep 2
- 
-curl -s -X POST "http://localhost:8080/createItem?name=%s" \
--u admin:admin \
--b /tmp/cookies.txt \
--H "$CRUMB" \
--H "Content-Type:text/xml" \
---data-binary @/tmp/job.xml
- 
-curl -s -X POST "http://localhost:8080/job/%s/build" \
--u admin:admin \
--b /tmp/cookies.txt \
--H "$CRUMB"
-`, appName, appName, appName)
- 
-                    scriptFile, _ := os.CreateTemp("", "setup-*.sh")
-                    defer os.Remove(scriptFile.Name())
- 
-                    scriptFile.WriteString(apiScript)
-                    scriptFile.Close()
- 
-                    core.ExecCommand(
-                        "Injecting XML Blueprint",
-                        true,
-                        false,
-                        "docker", "cp",
-                        xmlFile.Name(),
-                        fmt.Sprintf("%s:/tmp/job.xml", jenkinsName),
-                    )
- 
-                    core.ExecCommand(
-                        "Injecting API Script",
-                        true,
-                        false,
-                        "docker", "cp",
-                        scriptFile.Name(),
-                        fmt.Sprintf("%s:/tmp/setup.sh", jenkinsName),
-                    )
- 
-                    core.ExecCommand(
-                        "Executing Pushless Build API",
-                        true,
-                        false,
-                        "docker", "exec",
-                        jenkinsName,
-                        "bash", "/tmp/setup.sh",
-                    )
- 
-                    fmt.Println("\033[1;36m🎯 Your code was mounted and the pipeline is building!\033[0m")
-                }
-            }
- 
-        } else {
- 
-            fmt.Printf("\033[1;32m✅ Jenkins '%s' is active.\033[0m\n", jenkinsName)
-        }
- 
-        fmt.Println("\n\033[1;32m✅ CI/CD Sandbox is LIVE and Ready!\033[0m")
-        fmt.Printf("\033[33m👉 Jenkins UI: http://localhost:8080\033[0m\n")
-        fmt.Printf("\033[33m👉 Docker Push API: 127.0.0.1:5001\033[0m\n")
-        fmt.Println("\033[33m👉 Credentials: admin / admin\033[0m\n")
-    },
+
+			}
+
+		} else {
+			fmt.Printf("\033[1;32m✅ Jenkins '%s' is active.\033[0m\n", jenkinsName)
+		}
+
+		fmt.Println("\n\033[1;32m✅ CI/CD Sandbox Infrastructure is LIVE!\033[0m")
+		fmt.Printf("\033[33m👉 Jenkins UI: http://localhost:8080\033[0m\n")
+		fmt.Printf("\033[33m👉 Docker Push API: 127.0.0.1:5001\033[0m\n")
+		fmt.Println("\033[33m👉 Credentials: admin / admin\033[0m")
+
+		// --- NEW HANDOFF MESSAGE ---
+		fmt.Println("\n\033[1;36m🚀 Ready to deploy? Run 'pipeline run' to start your first build and track it live!\033[0m\n")
+	},
 }
- 
 var destroyCiCmd = &cobra.Command{
 	Use:   "destroy-ci",
 	Short: "Completely destroys the local CI/CD sandbox and optional scaffolding files",
@@ -351,8 +272,9 @@ var destroyCiCmd = &cobra.Command{
 			"--name", clusterName,
 		)
 
-		fmt.Println("\033[1;36m🔄 Restoring network context (Native)...\033[0m")
-		patchKubeConfig("host.docker.internal", "127.0.0.1")
+		// Clean up the temporary local kubeconfig
+		cwd, _ := os.Getwd()
+		os.Remove(filepath.Join(cwd, ".kubeconfig-jenkins"))
 
 		fmt.Println("\n\033[1;32m🧹 Infrastructure destroyed safely.\033[0m")
 
@@ -438,30 +360,35 @@ func isRegistryRunning() bool {
     return strings.TrimSpace(string(output)) != ""
 }
  
-func patchKubeConfig(oldStr string, newStr string) {
- 
-    homeDir, err := os.UserHomeDir()
- 
-    if err != nil {
-        fmt.Println("\033[31m❌ Could not find home directory to patch kubeconfig\033[0m")
-        return
-    }
- 
-    kubeConfigPath := filepath.Join(homeDir, ".kube", "config")
- 
-    input, err := os.ReadFile(kubeConfigPath)
- 
-    if err != nil {
-        fmt.Println("\033[31m❌ Could not read ~/.kube/config\033[0m")
-        return
-    }
- 
-    output := strings.ReplaceAll(string(input), oldStr, newStr)
- 
-    err = os.WriteFile(kubeConfigPath, []byte(output), 0644)
- 
-    if err != nil {
-        fmt.Println("\033[31m❌ Could not write to ~/.kube/config\033[0m")
-        return
-    }
+func generateJenkinsKubeConfig(projectPath string) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		fmt.Println("\033[31m❌ Could not find home directory to read kubeconfig\033[0m")
+		return
+	}
+
+	kubeConfigPath := filepath.Join(homeDir, ".kube", "config")
+	input, err := os.ReadFile(kubeConfigPath)
+	if err != nil {
+		fmt.Println("\033[31m❌ Could not read ~/.kube/config\033[0m")
+		return
+	}
+
+	// Defensive check against empty files
+	if len(input) == 0 {
+		fmt.Println("\033[31m❌ ~/.kube/config is empty\033[0m")
+		return
+	}
+
+	// Replace localhost with host.docker.internal for Jenkins
+	output := strings.ReplaceAll(string(input), "127.0.0.1", "host.docker.internal")
+	output = strings.ReplaceAll(output, "localhost", "host.docker.internal")
+
+	localKubeConfigPath := filepath.Join(projectPath, ".kubeconfig-jenkins")
+	err = os.WriteFile(localKubeConfigPath, []byte(output), 0644)
+	if err != nil {
+		fmt.Printf("\033[31m❌ Could not write isolated kubeconfig to %s: %v\033[0m\n", localKubeConfigPath, err)
+		return
+	}
 }
+

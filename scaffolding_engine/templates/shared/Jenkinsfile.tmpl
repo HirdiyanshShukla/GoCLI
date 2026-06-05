@@ -53,25 +53,38 @@ pipeline {
             }
         }
         stage('🚀 Deploy to Kubernetes') {
-            steps {
-                echo "Updating Kustomize and Deploying..."
-                script {
-                    sh """
-                    cd ${PROJECT_DIR}/k8s/base && \
-                    kustomize edit set image 127.0.0.1:5001/${APP_NAME}:latest=127.0.0.1:5001/${APP_NAME}:${env.GIT_COMMIT}
-                    """
-                    sh """
-                     kustomize build ${PROJECT_DIR}/k8s/overlays/prod | docker run -i --rm -u root --network host \
-                      -v ${env.HOST_HOME}/.kube:/root/.kube \
-                      -e KUBECONFIG=/root/.kube/config \
-                      bitnami/kubectl \
-                      --context kind-ephemeral-test \
-                      --insecure-skip-tls-verify=true \
-                      apply -f -
-                    """
+                    steps {
+                        echo "Updating Kustomize and Deploying..."
+                        script {
+                            sh """
+                            cd ${PROJECT_DIR}/k8s/base && \
+                            kustomize edit set image 127.0.0.1:5001/${APP_NAME}:latest=127.0.0.1:5001/${APP_NAME}:${env.GIT_COMMIT}
+                            """
+                            
+                            // 1. Apply the configuration
+                            sh """
+                            kustomize build ${PROJECT_DIR}/k8s/overlays/prod | docker run -i --rm -u root --network host \
+                            -v ${PROJECT_DIR}/.kubeconfig-jenkins:/root/.kube/config \
+                            -e KUBECONFIG=/root/.kube/config \
+                            bitnami/kubectl \
+                            --context kind-ephemeral-test \
+                            --insecure-skip-tls-verify=true \
+                            apply -f -
+                            """
+                            
+                            // 2. Force the rollout restart for local-dev iteration
+                            sh """
+                            docker run -i --rm -u root --network host \
+                            -v ${PROJECT_DIR}/.kubeconfig-jenkins:/root/.kube/config \
+                            -e KUBECONFIG=/root/.kube/config \
+                            bitnami/kubectl \
+                            --context kind-ephemeral-test \
+                            --insecure-skip-tls-verify=true \
+                            rollout restart deployment/${APP_NAME} -n ${APP_NAME}-ns
+                            """
+                        }
+                    }
                 }
-            }
-        }
     }
     post {
         always {

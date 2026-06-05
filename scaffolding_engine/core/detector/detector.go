@@ -1,7 +1,6 @@
 package detector
 
 import (
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,101 +20,61 @@ var ignoreDirs = map[string]bool{
 	"build":        true,
 }
 
-func findFileDeep(projectPath string, targetFileName string) (string, bool) {
-	foundPath := ""
-	found := false
+// DetectPackageManager deterministically scans for package managers
+func DetectPackageManager(projectPath string) string {
+	lockfiles := map[string]string{
+		"pnpm-lock.yaml":    "pnpm",
+		"yarn.lock":         "yarn",
+		"bun.lockb":         "bun",
+		"package-lock.json": "npm",
+	}
 
-	filepath.WalkDir(projectPath, func(path string, d fs.DirEntry, err error) error {
+	for file, manager := range lockfiles {
+		if _, err := os.Stat(filepath.Join(projectPath, file)); err == nil {
+			return manager
+		}
+	}
+	return "unknown or N/A"
+}
+
+// DetectFramework is a fast, offline static detector used only for local
+// validation and lint command routing where AI calls would be wasteful.
+func DetectFramework(projectPath string) string {
+	exists := func(name string) bool {
+		_, err := os.Stat(filepath.Join(projectPath, name))
+		return err == nil
+	}
+	readLower := func(name string) string {
+		data, err := os.ReadFile(filepath.Join(projectPath, name))
 		if err != nil {
-			return nil
+			return ""
 		}
-
-		if d.IsDir() {
-			if ignoreDirs[d.Name()] {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-
-		if d.Name() == targetFileName {
-			foundPath = path
-			found = true
-			return filepath.SkipAll 
-		}
-
-		return nil
-	})
-
-	return foundPath, found
-}
-
-func fileContains(path string, substr string) bool {
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return false
-	}
-	return strings.Contains(strings.ToLower(string(content)), strings.ToLower(substr))
-}
-
-// DetectFramework inspects signal files and returns (frameworkName, entryPath)
-func DetectFramework(projectPath string) (string, string) {
-	// ── 1. Java Frameworks (Wildcard handled in Dockerfile) ──────────────────
-	if _, ok := findFileDeep(projectPath, "pom.xml"); ok {
-		return "java_springboot", ""
-	}
-	if _, ok := findFileDeep(projectPath, "build.gradle"); ok {
-		return "java_springboot", ""
+		return strings.ToLower(string(data))
 	}
 
-	// ── 2. Python Frameworks (Dynamic Pathing) ───────────────────────────────
-	if reqPath, ok := findFileDeep(projectPath, "requirements.txt"); ok {
-		if fileContains(reqPath, "django") {
-			if pyPath, found := findFileDeep(projectPath, "manage.py"); found {
-				relPath, _ := filepath.Rel(projectPath, pyPath)
-				return "django", relPath
-			}
-			return "django", "manage.py" // Fallback
+	if exists("pom.xml") || exists("build.gradle") {
+		return "java_springboot"
+	}
+	if exists("requirements.txt") {
+		content := readLower("requirements.txt")
+		if strings.Contains(content, "django") || exists("manage.py") {
+			return "django"
 		}
-		if fileContains(reqPath, "fastapi") {
-			if pyPath, found := findFileDeep(projectPath, "main.py"); found {
-				relPath, _ := filepath.Rel(projectPath, pyPath)
-				// FastAPI needs dot notation (e.g., src.main:app)
-				module := strings.ReplaceAll(strings.TrimSuffix(relPath, ".py"), string(filepath.Separator), ".")
-				return "fastapi", module
-			}
-			if pyPath, found := findFileDeep(projectPath, "app.py"); found {
-				relPath, _ := filepath.Rel(projectPath, pyPath)
-				module := strings.ReplaceAll(strings.TrimSuffix(relPath, ".py"), string(filepath.Separator), ".")
-				return "fastapi", module
-			}
-			return "fastapi", "main" // Fallback
+		if strings.Contains(content, "fastapi") {
+			return "fastapi"
 		}
 	}
-	
-	// Fallback for Django if requirements.txt is missing
-	if pyPath, ok := findFileDeep(projectPath, "manage.py"); ok {
-		relPath, _ := filepath.Rel(projectPath, pyPath)
-		return "django", relPath
+	if exists("manage.py") {
+		return "django"
 	}
-
-// ── 3. JavaScript Frameworks (Standardized Commands) ─────────────────────
-	if packageJsonPath, ok := findFileDeep(projectPath, "package.json"); ok {
-		
-		// 1. Check for Next.js FIRST (Meta-framework overrides base libraries)
-		if fileContains(packageJsonPath, `"next"`) {
-			return "unknown", "" // Send to AI
+	if exists("package.json") {
+		content := readLower("package.json")
+		if strings.Contains(content, `"react"`) {
+			return "react"
 		}
-
-		// 2. Standard React SPA fallback
-		if fileContains(packageJsonPath, `"react"`) || fileContains(packageJsonPath, `"react-scripts"`) {
-			return "react", ""
-		}
-		
-		// 3. Other Node apps
-		if fileContains(packageJsonPath, `"express"`) {
-			return "expressjs", ""
+		if strings.Contains(content, `"express"`) {
+			return "expressjs"
 		}
 	}
-
-	return "unknown", ""
+	return "unknown"
 }

@@ -1,9 +1,11 @@
 package cmd
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"pipeline-cli/scaffolding_engine/core/detector"
 	"pipeline-cli/scaffolding_engine/core/generator"
@@ -22,36 +24,26 @@ var initCmd = &cobra.Command{
 			return
 		}
 
-		framework, entryPath := detector.DetectFramework(cwd)
-		fmt.Printf("Detected framework: %s\n", framework)
+		fmt.Println("\033[1;36m🤖 Analyzing project structure and inferring configuration...\033[0m")
 
-		var aiResult *detector.AIDetectionResult
-
-		if framework == "unknown" {
-			fmt.Println("\033[1;36m🤖 Unknown framework detected. Consulting AI for identification...\033[0m")
-			result, err := detector.AIDetectFramework(cwd)
-			if err != nil {
-				fmt.Printf("\033[33m⚠️  AI detection failed: %s\033[0m\n", err.Error())
-				fmt.Println("Could not detect or identify the framework.")
-				return
-			}
-			framework = result.Framework
-			entryPath = result.EntryPath
-			aiResult = &result
+		aiResult, err := detector.AIDetectFramework(cwd)
+		if err != nil {
+			fmt.Printf("\033[33m⚠️  AI detection failed: %s\033[0m\n", err.Error())
+			os.Exit(1)
 		}
 
-		err = generator.GenerateFiles(framework, cwd, entryPath, aiResult)
+		// The Generator handles the routing validation dynamically
+		err = generator.GenerateFiles(aiResult.Framework, cwd, aiResult.EntryPath, &aiResult)
 		if err != nil {
 			fmt.Printf("\033[1;31m❌ %s\033[0m\n", err.Error())
 			os.Exit(1)
 		}
-		fmt.Println("Scaffolding generation successful!")
 
-		// Generate pipeline.yaml starter — only if it does not already exist
+		fmt.Println("\n\033[1;32m✨ Scaffolding generation successful!\033[0m")
+
 		yamlPath := filepath.Join(cwd, "pipeline.yaml")
 		if _, statErr := os.Stat(yamlPath); os.IsNotExist(statErr) {
-			yamlContent := buildPipelineYaml(framework)
-
+			yamlContent := buildPipelineYaml(aiResult.Framework)
 			if writeErr := os.WriteFile(yamlPath, []byte(yamlContent), 0644); writeErr != nil {
 				fmt.Printf("\033[33m⚠️  Could not write pipeline.yaml: %v\033[0m\n", writeErr)
 			} else {
@@ -59,6 +51,20 @@ var initCmd = &cobra.Command{
 			}
 		} else {
 			fmt.Println("⚠️  pipeline.yaml already exists — skipping (your customizations are preserved)")
+		}
+
+		fmt.Println("\n\033[1;33m❓ Do you want to boot the local CI/CD sandbox for this project?\033[0m")
+		fmt.Print("This takes ~5 minutes. (y/N): ")
+
+		reader := bufio.NewReader(os.Stdin)
+		response, _ := reader.ReadString('\n')
+		response = strings.TrimSpace(strings.ToLower(response))
+
+		if response == "y" || response == "yes" {
+			fmt.Println("\n\033[1;36mTransitioning to prep-ci...\033[0m")
+			prepCiCmd.Run(cmd, args)
+		} else {
+			fmt.Println("\n\033[1;32m✅ Setup complete. Run 'pipeline prep-ci' whenever you are ready to test locally.\033[0m")
 		}
 	},
 }
