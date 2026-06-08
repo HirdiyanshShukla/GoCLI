@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"text/tabwriter"
 
-	"pipeline-cli/core/config"
-	"pipeline-cli/core/policy"
-	"pipeline-cli/policies"
+	"opsai/core/config"
+	"opsai/core/policy"
+	"opsai/policies"
 
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
@@ -81,10 +81,11 @@ var policyCheckCmd = &cobra.Command{
 
 		// --policy <name>: run a single specific policy
 		if checkPolicyFlag != "" {
+			cliName := filepath.Base(os.Args[0])
 			p, ok := registry[checkPolicyFlag]
 			if !ok {
 				fmt.Printf("\033[1;31m❌ Unknown policy: %s\033[0m\n", checkPolicyFlag)
-				fmt.Println("Run 'pipeline policy list' to see available policies.")
+				fmt.Printf("Run '%s policy list' to see available policies.\n", cliName)
 				os.Exit(1)
 			}
 			result := p.Run(cwd, cfg.Policies.Config)
@@ -158,8 +159,9 @@ var policyDisableCmd = &cobra.Command{
 		// Validate the policy name exists in the registry
 		registry := policies.All()
 		if _, ok := registry[name]; !ok {
+			cliName := filepath.Base(os.Args[0])
 			fmt.Printf("\033[1;31m❌ Unknown policy: %s\033[0m\n", name)
-			fmt.Println("Run 'pipeline policy list' to see available policies.")
+			fmt.Printf("Run '%s policy list' to see available policies.\n", cliName)
 			os.Exit(1)
 		}
 
@@ -197,8 +199,9 @@ var policyExplainCmd = &cobra.Command{
 		registry := policies.All()
 		p, ok := registry[name]
 		if !ok {
+			cliName := filepath.Base(os.Args[0])
 			fmt.Printf("\033[1;31m❌ Unknown policy: %s\033[0m\n", name)
-			fmt.Println("Run 'pipeline policy list' to see available policies.")
+			fmt.Printf("Run '%s policy list' to see available policies.\n", cliName)
 			os.Exit(1)
 		}
 
@@ -206,7 +209,8 @@ var policyExplainCmd = &cobra.Command{
 		fmt.Printf("  Category  : %s\n", p.Category())
 		fmt.Printf("  Severity  : %s\n", p.Severity())
 		fmt.Printf("  Description:\n    %s\n", p.Description())
-		fmt.Printf("\nTo disable: pipeline policy disable %s\n\n", p.Name())
+		cliName2 := filepath.Base(os.Args[0])
+		fmt.Printf("\nTo disable: %s policy disable %s\n\n", cliName2, p.Name())
 	},
 }
 
@@ -223,7 +227,8 @@ func loadPipelineConfig(dir string) (config.PipelineConfig, error) {
 
 	// Check if file exists at all; LoadConfig returns empty struct when missing.
 	if _, statErr := os.Stat(filepath.Join(dir, "pipeline.yaml")); os.IsNotExist(statErr) {
-		fmt.Println("No pipeline.yaml found. Run 'pipeline init' first to create one.")
+		cliName := filepath.Base(os.Args[0])
+		fmt.Printf("No pipeline.yaml found. Run '%s init' first to create one.\n", cliName)
 		return cfg, fmt.Errorf("pipeline.yaml not found")
 	}
 

@@ -1,4 +1,4 @@
-module pipeline-cli
+module opsai
 
 go 1.25.8
 

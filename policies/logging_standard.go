@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"pipeline-cli/core/policy"
+	"opsai/core/policy"
 )
 
 // LoggingStandard checks for bare logging calls that bypass proper structured loggers.

@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"pipeline-cli/core/ai"
+	"opsai/core/ai"
 
 	"github.com/spf13/cobra"
 )
@@ -20,9 +20,9 @@ var runCmd = &cobra.Command{
 	Use:   "run",
 	Short: "Instantly syncs your Jenkinsfile, triggers a build, and tracks status live",
 	Run: func(cmd *cobra.Command, args []string) {
-		// Guard — sandbox must be running
+		cliName := filepath.Base(os.Args[0])
 		if !isJenkinsRunning() {
-			fmt.Println("\033[1;31m❌ Jenkins is not running. Start your sandbox first with 'pipeline resume' or 'pipeline prep-ci'\033[0m")
+			fmt.Printf("\033[1;31m❌ Jenkins is not running. Start your sandbox first with '%s resume' or '%s prep-ci'\033[0m\n", cliName, cliName)
 			return
 		}
 
@@ -34,14 +34,12 @@ var runCmd = &cobra.Command{
 
 		fmt.Println("\033[1;36m🚀 Syncing pipeline and triggering build...\033[0m")
 
-		// Read Jenkinsfile
 		jenkinsfileBytes, err := os.ReadFile(filepath.Join(cwd, "Jenkinsfile"))
 		if err != nil {
-			fmt.Println("\033[1;31m❌ No Jenkinsfile found. Run 'pipeline init' first.\033[0m")
+			fmt.Printf("\033[1;31m❌ No Jenkinsfile found. Run '%s init' first.\033[0m\n", cliName)
 			return
 		}
 
-		// Wrap in pipeline job XML
 		scriptContent := fmt.Sprintf("<![CDATA[%s]]>", string(jenkinsfileBytes))
 		jobXML := fmt.Sprintf(`<?xml version='1.1' encoding='UTF-8'?>
 <flow-definition plugin="workflow-job">
@@ -56,29 +54,45 @@ var runCmd = &cobra.Command{
 		xmlFile.WriteString(jobXML)
 		xmlFile.Close()
 
-		// Jenkins API script — delete old job, recreate with new Jenkinsfile, trigger build
+		// 🔥 THE FIX: Smart Update & Queue Tracking Script
 		apiScript := fmt.Sprintf(`#!/bin/bash
 set -e
 CRUMB=$(curl -s -c /tmp/cookies.txt -u admin:admin "http://localhost:8080/crumbIssuer/api/xml?xpath=concat(//crumbRequestField,\":\",//crumb)")
 
-curl -s -X POST "http://localhost:8080/job/%s/doDelete" \
-  -u admin:admin -b /tmp/cookies.txt -H "$CRUMB" > /dev/null || true
-sleep 1
-
-curl -s -X POST "http://localhost:8080/createItem?name=%s" \
+# 1. Try to cleanly update the existing job configuration
+HTTP_STATUS=$(curl -s -o /dev/null -w "%%{http_code}" -X POST "http://localhost:8080/job/%s/config.xml" \
   -u admin:admin -b /tmp/cookies.txt -H "$CRUMB" \
-  -H "Content-Type:text/xml" --data-binary @/tmp/job.xml > /dev/null
+  -H "Content-Type:text/xml" --data-binary @/tmp/job.xml)
 
+# 2. If the job doesn't exist (HTTP 404), create it
+if [ "$HTTP_STATUS" -eq 404 ]; then
+  curl -s -X POST "http://localhost:8080/createItem?name=%s" \
+    -u admin:admin -b /tmp/cookies.txt -H "$CRUMB" \
+    -H "Content-Type:text/xml" --data-binary @/tmp/job.xml > /dev/null
+fi
+
+# 3. Fetch the expected upcoming build number
+NEXT_BUILD=$(curl -s -u admin:admin -b /tmp/cookies.txt "http://localhost:8080/job/%s/api/json" | grep -o '"nextBuildNumber":[0-9]*' | cut -d':' -f2 || true)
+
+# 4. Trigger the build
 curl -s -X POST "http://localhost:8080/job/%s/build" \
   -u admin:admin -b /tmp/cookies.txt -H "$CRUMB" > /dev/null
-`, appName, appName, appName)
+
+# 5. Prevent Race Condition: Wait for the job to exit the queue
+for i in {1..15}; do
+  LAST_BUILD=$(curl -s -u admin:admin -b /tmp/cookies.txt "http://localhost:8080/job/%s/api/json" | grep -o '"lastBuild":{"_class":"[^"]*","number":[0-9]*' | grep -o '[0-9]*$' || true)
+  if [ "$LAST_BUILD" == "$NEXT_BUILD" ]; then
+    break
+  fi
+  sleep 1
+done
+`, appName, appName, appName, appName, appName)
 
 		scriptFile, _ := os.CreateTemp("", "run-*.sh")
 		defer os.Remove(scriptFile.Name())
 		scriptFile.WriteString(apiScript)
 		scriptFile.Close()
 
-		// Inject files into Jenkins container
 		if err := exec.Command("docker", "cp", xmlFile.Name(), "local-jenkins:/tmp/job.xml").Run(); err != nil {
 			fmt.Println("\033[1;31m❌ Failed to inject job definition into Jenkins container.\033[0m")
 			return
@@ -89,7 +103,6 @@ curl -s -X POST "http://localhost:8080/job/%s/build" \
 			return
 		}
 
-		// Execute the API script
 		execCmd := exec.Command("docker", "exec", "local-jenkins", "bash", "/tmp/run.sh")
 		execCmd.Stdout = os.Stdout
 		execCmd.Stderr = os.Stderr
@@ -98,7 +111,6 @@ curl -s -X POST "http://localhost:8080/job/%s/build" \
 			return
 		}
 
-		// --- LIVE BUILD TRACKING (HANDOFF TO ADVANCED MONITOR) ---
 		monitorJenkinsBuild(appName)
 	},
 }
@@ -184,7 +196,6 @@ func monitorJenkinsBuild(appName string) {
 						defer logResp.Body.Close()
 						body, err := io.ReadAll(logResp.Body)
 						if err == nil && len(body) > 0 {
-							// printHighlightedLogSummary is available because logs.go is in the same 'cmd' package
 							printHighlightedLogSummary(string(body))
 
 							fmt.Println("\033[1;36m🤖 Analyzing logs...\033[0m")
@@ -273,7 +284,6 @@ func monitorKubernetesDeployment(appName string) {
 		cmd := exec.Command("kubectl", "get", "pods", "-n", namespace, "-o", "json")
 		output, err := cmd.CombinedOutput()
 		if err != nil {
-			// NEW: Expose the actual kubectl error (e.g. timeout, connection refused)
 			fmt.Printf("\r\033[33m⚠️ kubectl error: %s\033[0m\033[K", strings.TrimSpace(string(output)))
 			time.Sleep(3 * time.Second)
 			continue

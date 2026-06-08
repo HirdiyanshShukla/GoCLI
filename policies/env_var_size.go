@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"regexp"
 
-	"pipeline-cli/core/policy"
+	"opsai/core/policy"
 )
 
 // EnvVarSize flags environment variable values over 500 characters.

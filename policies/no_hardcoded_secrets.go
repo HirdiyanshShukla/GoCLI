@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strings"
 
-	"pipeline-cli/core/policy"
+	"opsai/core/policy"
 )
 
 // NoHardcodedSecrets scans source files and pipeline.yaml for credentials

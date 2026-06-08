@@ -9,9 +9,9 @@ import (
 	"strings"
 	"text/template"
 
-	"pipeline-cli/core/config"
-	"pipeline-cli/scaffolding_engine/core/detector"
-	"pipeline-cli/scaffolding_engine/templates"
+	"opsai/core/config"
+	"opsai/scaffolding_engine/core/detector"
+	"opsai/scaffolding_engine/templates"
 )
 
 func GenerateFiles(framework string, projectPath string, entryPath string, aiResult *detector.AIDetectionResult) error {

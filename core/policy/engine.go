@@ -1,7 +1,7 @@
 package policy
 
 import (
-	"pipeline-cli/core/config"
+	"opsai/core/config"
 )
 
 // RunPolicies executes all applicable policies according to the mode in cfg.

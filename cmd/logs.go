@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"pipeline-cli/core/ai"
+	"opsai/core/ai"
 
 	"github.com/spf13/cobra"
 )

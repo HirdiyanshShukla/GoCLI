@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"pipeline-cli/core/policy"
+	"opsai/core/policy"
 )
 
 // FeatureFlags verifies that a feature flag library is declared in dependencies

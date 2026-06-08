@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"pipeline-cli/core/policy"
+	"opsai/core/policy"
 )
 
 // NoLatestTag ensures no Dockerfile or Kubernetes manifest uses the :latest

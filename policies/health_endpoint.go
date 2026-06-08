@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"pipeline-cli/core/policy"
+	"opsai/core/policy"
 )
 
 // HealthEndpoint checks that the project exposes a health check route.

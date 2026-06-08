@@ -8,8 +8,8 @@ import (
     "path/filepath"
     "strings"
  
-    "pipeline-cli/core"
-    "pipeline-cli/core/preflight"
+    "opsai/core"
+    "opsai/core/preflight"
  
     "github.com/spf13/cobra"
 )
@@ -232,7 +232,8 @@ jenkins:
 		fmt.Println("\033[33m👉 Credentials: admin / admin\033[0m")
 
 		// --- NEW HANDOFF MESSAGE ---
-		fmt.Println("\n\033[1;36m🚀 Ready to deploy? Run 'pipeline run' to start your first build and track it live!\033[0m\n")
+		cliName := filepath.Base(os.Args[0])
+		fmt.Printf("\n\033[1;36m🚀 Ready to deploy? Run '%s run' to start your first build and track it live!\033[0m\n\n", cliName)
 	},
 }
 var destroyCiCmd = &cobra.Command{

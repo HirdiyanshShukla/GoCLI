@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"pipeline-cli/core/ai"
-	"pipeline-cli/scaffolding_engine/core/rules"
+	"opsai/core/ai"
+	"opsai/scaffolding_engine/core/rules"
 )
 
 // AIDetectionResult holds all variables returned by AI framework detection.

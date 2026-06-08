@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"pipeline-cli/scaffolding_engine/core/detector"
-	"pipeline-cli/scaffolding_engine/core/generator"
+	"opsai/scaffolding_engine/core/detector"
+	"opsai/scaffolding_engine/core/generator"
 
 	"github.com/spf13/cobra"
 )
@@ -64,7 +64,8 @@ var initCmd = &cobra.Command{
 			fmt.Println("\n\033[1;36mTransitioning to prep-ci...\033[0m")
 			prepCiCmd.Run(cmd, args)
 		} else {
-			fmt.Println("\n\033[1;32m✅ Setup complete. Run 'pipeline prep-ci' whenever you are ready to test locally.\033[0m")
+			cliName := filepath.Base(os.Args[0])
+			fmt.Printf("\n\033[1;32m✅ Setup complete. Run '%s prep-ci' whenever you are ready to test locally.\033[0m\n", cliName)
 		}
 	},
 }

@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"pipeline-cli/core/policy"
+	"opsai/core/policy"
 )
 
 // ResourceLimits ensures that Kubernetes Deployments define CPU and Memory limits

@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"pipeline-cli/core/policy"
+	"opsai/core/policy"
 )
 
 // MandatoryProbes checks that every Kubernetes Deployment manifest defines

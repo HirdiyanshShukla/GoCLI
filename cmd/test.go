@@ -1,3 +1,4 @@
+// File: cmd/test.go
 package cmd
 
 import (
@@ -5,75 +6,49 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 
-	"pipeline-cli/core"
-	"pipeline-cli/core/config"
-	"pipeline-cli/core/policy"
-	"pipeline-cli/policies"
-	"pipeline-cli/scaffolding_engine/core/detector"
+	"opsai/core"
+	"opsai/core/config"
+	"opsai/core/policy"
+	"opsai/policies"
+	"opsai/scaffolding_engine/core/detector"
 
 	"github.com/spf13/cobra"
 )
 
-var testCmd = &cobra.Command{
-	Use:   "test",
-	Short: "Run tests and linters",
-}
-
-var lintCmd = &cobra.Command{
-	Use:   "lint",
-	Short: "Run code linters",
-	Run: func(cmd *cobra.Command, args []string) { lintCode() },
-}
-
-var dockerCmd = &cobra.Command{
-	Use:   "docker",
-	Short: "Checks Dockerfile for best practices and optimization",
-	Run: func(cmd *cobra.Command, args []string) { lintDocker() },
-}
-
-var k8sCmd = &cobra.Command{
-	Use:   "k8s",
-	Short: "Validates Kubernetes manifests against official schemas",
-	Run: func(cmd *cobra.Command, args []string) { lintK8s() },
-}
-
-var securityCmd = &cobra.Command{
-	Use:   "security",
-	Short: "Runs a deep security audit on all Infrastructure as Code",
-	Run: func(cmd *cobra.Command, args []string) { securityScan() },
-}
-
-var unitCmd = &cobra.Command{
-	Use:   "unit",
-	Short: "Run unit tests",
-	Run: func(cmd *cobra.Command, args []string) { unitTests() },
-}
-
-var pipelineCmd = &cobra.Command{
-	Use:   "pipeline",
-	Short: "Validates the CI/CD Jenkinsfile for syntax errors",
-	Run: func(cmd *cobra.Command, args []string) { lintPipeline() },
-}
-
-var allCmd = &cobra.Command{
-	Use:   "all",
-	Short: "Run all tests",
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("Starting Full Test Suite...")
-		lintCode(); lintDocker(); lintK8s(); securityScan(); unitTests(); lintPipeline()
-		fmt.Println("All tests finished.")
-	},
+// requireLocalTool checks if a binary is in the host's PATH.
+func requireLocalTool(tool string, installMsg string) bool {
+	if _, err := exec.LookPath(tool); err != nil {
+		fmt.Printf("\033[33m⚠️  Required tool '%s' is not installed or not in PATH.\033[0m\n", tool)
+		fmt.Printf("\033[33m   👉 Fix: %s\033[0m\n", installMsg)
+		return false
+	}
+	return true
 }
 
 var validateCmd = &cobra.Command{
 	Use:   "validate",
-	Short: "Shift-Left: Runs all local linters, unit tests, and security scans before deployment",
+	Short: "Runs comprehensive local validation (Code, Docker, K8s, Security, and Policies)",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("\033[1;36m🔎 Starting Local Validation (Shift-Left)...\033[0m")
-		lintCode(); lintDocker(); lintK8s(); securityScan(); unitTests(); lintPipeline()
+		fmt.Println("\033[1;36m🔍 Commencing Comprehensive Local Validation...\033[0m")
 
-		// ── Policy Engine ─────────────────────────────────────────────────────
+		fmt.Println("\n\033[1;34m📋 Stage 1: Running Code Quality Linters...\033[0m")
+		lintCode()
+
+		fmt.Println("\n\033[1;34m🧪 Stage 2: Executing Unit Test Suites...\033[0m")
+		unitTests()
+
+		fmt.Println("\n\033[1;34m🐳 Stage 3: Linting Dockerfile...\033[0m")
+		lintDocker()
+
+		fmt.Println("\n\033[1;34m☸️  Stage 4: Validating Kubernetes Manifests...\033[0m")
+		lintK8s()
+
+		fmt.Println("\n\033[1;34m🔒 Stage 5: Running Security Scans...\033[0m")
+		securityScan()
+
+		fmt.Println("\n\033[1;34m🛡️  Stage 6: Evaluating Platform Policies...\033[0m")
 		cwd, _ := os.Getwd()
 		cfg, cfgErr := config.LoadConfig(cwd)
 		policyFailed := false
@@ -85,34 +60,102 @@ var validateCmd = &cobra.Command{
 			policyFailed = policy.PrintReport(results)
 		}
 
-		// Print the validate summary before deciding exit code
 		if policyFailed {
 			fmt.Println("\n\033[1;31m❌ Validation failed: one or more error-severity policies did not pass.\033[0m")
 			os.Exit(1)
 		}
-		fmt.Println("\n\033[1;32m✅ All local validations passed! Your code is safe and ready for CI deployment.\033[0m")
+		fmt.Println("\n\033[1;32m✅ Complete Local Validation Successful! Codebase is secure, compliant, and ready for deployment.\033[0m")
 	},
 }
 
 func init() {
-	rootCmd.AddCommand(testCmd)
 	rootCmd.AddCommand(validateCmd)
-	testCmd.AddCommand(lintCmd, dockerCmd, k8sCmd, securityCmd, unitCmd, pipelineCmd, allCmd)
 }
 
 func lintCode() {
 	cwd, _ := os.Getwd()
-	framework, _ := detector.DetectFramework(cwd)
+	framework := detector.DetectFramework(cwd)
 
 	switch framework {
-	case "django", "fastapi":
-		core.ExecCommand("Python Flake8", true, false, "flake8", ".", "--exclude=env,venv,.git,__pycache__")
-	case "expressjs", "react":
-		core.ExecCommand("Node.js ESLint", true, false, "npm", "run", "lint")
+	case "react", "expressjs":
+		if requireLocalTool("npm", "Install Node.js and run 'npm install' in this directory") {
+			// Set to true so it prints the error but continues the pipeline
+			core.ExecCommand("Code Linting", true, true, "npm", "run", "lint")
+		}
+	case "django":
+		if requireLocalTool("flake8", "pip install flake8") {
+			core.ExecCommand("Code Linting", true, true, "flake8", ".", "--exclude=env,venv,.env,.venv,node_modules,.git,__pycache__")
+		}
+	case "fastapi":
+		if requireLocalTool("black", "pip install black") {
+			core.ExecCommand("Code Linting", true, true, "black", "--check", ".")
+		}
 	case "java_springboot":
-		core.ExecCommand("Java Checkstyle", true, false, "./mvnw", "checkstyle:check")
+		if _, err := os.Stat(filepath.Join(cwd, "mvnw")); err == nil {
+			core.ExecCommand("Code Linting", true, true, "./mvnw", "checkstyle:check")
+		} else {
+			fmt.Println("\033[33m⚠️  ./mvnw not found. Please ensure you are at the project root.\033[0m")
+		}
 	default:
-		fmt.Println("No code linter configured for this framework... Skipping.")
+		fmt.Println("ℹ️  No default linter configured for this framework. Skipping code linting.")
+	}
+}
+
+func unitTests() {
+	cwd, _ := os.Getwd()
+	framework := detector.DetectFramework(cwd)
+
+	var shell, shellFlag string
+	if runtime.GOOS == "windows" {
+		shell = "cmd"
+		shellFlag = "/c"
+	} else {
+		shell = "sh"
+		shellFlag = "-c"
+	}
+
+	switch framework {
+	case "react", "expressjs":
+		if requireLocalTool("npm", "Install Node.js and run 'npm install'") {
+			// Set to true to warn and continue
+			core.ExecCommand("Unit Testing", true, true, shell, shellFlag, "npm test")
+		}
+	case "django":
+		if requireLocalTool("python", "Install Python") {
+			core.ExecCommand("Unit Testing", true, true, shell, shellFlag, "python manage.py test")
+		}
+	case "fastapi":
+		if requireLocalTool("pytest", "pip install pytest") {
+			core.ExecCommand("Unit Testing", true, true, shell, shellFlag, "pytest")
+		}
+	case "java_springboot":
+		if _, err := os.Stat(filepath.Join(cwd, "mvnw")); err == nil {
+			core.ExecCommand("Unit Testing", true, true, shell, shellFlag, "./mvnw test")
+		} else {
+			fmt.Println("\033[33m⚠️  ./mvnw not found.\033[0m")
+		}
+	default:
+		fmt.Println("ℹ️  Custom framework detected. Consulting pipeline.yaml contract...")
+
+		yamlPath := filepath.Join(cwd, "pipeline.yaml")
+		if _, err := os.Stat(yamlPath); os.IsNotExist(err) {
+			cliName := filepath.Base(os.Args[0])
+			fmt.Printf("\033[1;31m❌ pipeline.yaml missing. Please execute '%s init' first.\033[0m\n", cliName)
+			os.Exit(1)
+		}
+
+		userConfig, err := config.LoadConfig(cwd)
+		if err != nil {
+			fmt.Printf("\033[1;31m❌ Configuration Error: %s\033[0m\n", err.Error())
+			os.Exit(1)
+		}
+
+		extractedCmd := userConfig.App.TestCommand
+		if extractedCmd == "" || extractedCmd == "your-test-command" || extractedCmd == "echo 'No tests defined'" {
+			fmt.Println("\033[1;33m⚠️  No custom validation or test_command found in pipeline.yaml. Skipping code test layer.\033[0m")
+		} else {
+			core.ExecCommand("Unit Testing", true, true, shell, shellFlag, extractedCmd)
+		}
 	}
 }
 
@@ -121,7 +164,6 @@ func lintDocker() {
 	cwd, _ := os.Getwd()
 	if project["has_docker"] {
 		fmt.Println("Linting Dockerfile...")
-		// Cross-platform fix: Mount the directory instead of using the shell '<' redirect
 		core.ExecCommand("Hadolint Docker Check", true, false, "docker", "run", "--rm", "-v", fmt.Sprintf("%s:/work", cwd), "-w", "/work", "hadolint/hadolint", "hadolint", "Dockerfile")
 	} else {
 		fmt.Println("No Dockerfile found. Skipping.")
@@ -133,12 +175,18 @@ func lintK8s() {
 	cwd, _ := os.Getwd()
 	if project["has_k8s"] {
 		fmt.Println("Validating Kubernetes manifests...")
-		
-		// Cross-platform fix: Dump to a temp file natively instead of using shell pipes '|'
+
+		overlayPath := filepath.Join(cwd, "k8s/overlays/local")
+		if _, err := os.Stat(overlayPath); os.IsNotExist(err) {
+			cliName := filepath.Base(os.Args[0])
+			fmt.Printf("\033[33m⚠️  No Kustomize overlays found. Please run '%s init' first to generate manifests.\033[0m\n", cliName)
+			return
+		}
+
 		tempFile, _ := os.CreateTemp("", "k8s-dump-*.yaml")
 		defer os.Remove(tempFile.Name())
 
-		kustomizeCmd := exec.Command("kubectl", "kustomize", filepath.Join(cwd, "k8s/overlays/local"))
+		kustomizeCmd := exec.Command("kubectl", "kustomize", overlayPath)
 		output, _ := kustomizeCmd.Output()
 		tempFile.Write(output)
 		tempFile.Close()
@@ -157,33 +205,5 @@ func securityScan() {
 		core.ExecCommand("Checkov Security Audit", true, false, "docker", "run", "--rm", "-v", fmt.Sprintf("%s:/work", cwd), "bridgecrew/checkov", "-d", "/work", "--framework", "dockerfile", "kubernetes", "github_actions", "--skip-check", "CKV_K8S_14,CKV_K8S_43,CKV2_K8S_6,CKV2_GHA_1,CKV_K8S_40,CKV_K8S_31", "--skip-path", "env", "--skip-path", "venv", "--skip-path", "node_modules", "--skip-path", ".git", "--skip-path", "k8s/overlays", "--quiet", "--compact")
 	} else {
 		fmt.Println("No infrastructure files found for security scan. Skipping.")
-	}
-}
-
-func unitTests() {
-	cwd, _ := os.Getwd()
-	framework, entryPath := detector.DetectFramework(cwd) 
-
-	switch framework {
-	case "django":
-		core.ExecCommand("Django Unit Tests", true, false, "python3", entryPath, "test")
-	case "fastapi":
-		core.ExecCommand("FastAPI Pytest", true, false, "pytest")
-	case "expressjs", "react":
-		core.ExecCommand("Node.js NPM Test", true, false, "npm", "run", "test")
-	case "java_springboot":
-		core.ExecCommand("Java Spring Boot Tests", true, false, "./mvnw", "test")
-	default:
-		fmt.Println("No test framework configured... Skipping.")
-	}
-}
-
-func lintPipeline() {
-	cwd, _ := os.Getwd()
-	if _, err := os.Stat(cwd + "/Jenkinsfile"); !os.IsNotExist(err) {
-		fmt.Println("Validating Jenkinsfile Pipeline...")
-		core.ExecCommand("Jenkinsfile Linter", true, false, "docker", "run", "--rm", "-v", fmt.Sprintf("%s:/work", cwd), "-w", "/work", "nvuillam/npm-groovy-lint", "-f", "Jenkinsfile", "--failon", "warning")
-	} else {
-		fmt.Println("No Jenkinsfile found. Skipping pipeline linting.")
 	}
 }

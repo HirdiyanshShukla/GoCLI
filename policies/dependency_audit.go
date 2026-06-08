@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"pipeline-cli/core/policy"
+	"opsai/core/policy"
 )
 
 // DependencyAudit checks for banned or deprecated packages in the dependency file.

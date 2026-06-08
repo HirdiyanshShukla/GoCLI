@@ -1,6 +1,6 @@
 package main
 
-import "pipeline-cli/cmd"
+import "opsai/cmd"
 
 func main() {
 	cmd.Execute()

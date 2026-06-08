@@ -2,11 +2,13 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
-	"pipeline-cli/core"
+	"opsai/core"
 
 	"github.com/spf13/cobra"
 )
@@ -15,6 +17,7 @@ var pauseCmd = &cobra.Command{
 	Use:   "pause",
 	Short: "Suspends the CI/CD sandbox to save RAM and battery — data is preserved",
 	Run: func(cmd *cobra.Command, args []string) {
+		cliName := filepath.Base(os.Args[0])
 		fmt.Println("\033[1;33m⏸️  Pausing infrastructure...\033[0m")
 
 		// Stop in reverse dependency order: Jenkins first, then cluster, then registry
@@ -26,7 +29,7 @@ var pauseCmd = &cobra.Command{
 			"docker", "stop", "local-registry")
 
 		fmt.Println("\n\033[1;32m✅ Sandbox paused. All data preserved.\033[0m")
-		fmt.Println("\033[33m👉 Resume with: pipeline resume\033[0m")
+		fmt.Printf("\033[33m👉 Resume with: %s resume\033[0m\n", cliName)
 	},
 }
 

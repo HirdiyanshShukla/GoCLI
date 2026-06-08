@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	"pipeline-cli/core/policy"
+	"opsai/core/policy"
 )
 
 // ApiVersioning checks that all defined routes include a version prefix (v1/, v2/, etc.).
