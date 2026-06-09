@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"opsai/core/policy"
+	"devsandbox/core/policy"
 )
 
 // NoPrivilegedContainers checks that no Kubernetes manifest sets

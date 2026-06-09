@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"opsai/core/policy"
+	"devsandbox/core/policy"
 )
 
 // LoggingStandard checks for bare logging calls that bypass proper structured loggers.

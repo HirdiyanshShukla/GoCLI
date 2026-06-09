@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"opsai/core/policy"
+	"devsandbox/core/policy"
 )
 
 // NoLatestTag ensures no Dockerfile or Kubernetes manifest uses the :latest

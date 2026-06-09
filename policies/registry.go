@@ -1,6 +1,6 @@
 package policies
 
-import "opsai/core/policy"
+import "devsandbox/core/policy"
 
 // All returns the full registry of available policies keyed by their Name().
 func All() map[string]policy.Policy {

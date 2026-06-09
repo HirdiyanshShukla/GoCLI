@@ -7,10 +7,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"opsai/core"
-	"opsai/core/ai"
-	"opsai/scaffolding_engine/core/detector"
-	"opsai/scaffolding_engine/core/generator"
+	"devsandbox/core"
+	"devsandbox/core/ai"
+	"devsandbox/scaffolding_engine/core/detector"
+	"devsandbox/scaffolding_engine/core/generator"
 
 	"github.com/spf13/cobra"
 )

@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"text/tabwriter"
 
-	"opsai/core/config"
-	"opsai/core/policy"
-	"opsai/policies"
+	"devsandbox/core/config"
+	"devsandbox/core/policy"
+	"devsandbox/policies"
 
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"

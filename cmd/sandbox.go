@@ -8,8 +8,8 @@ import (
     "path/filepath"
     "strings"
  
-    "opsai/core"
-    "opsai/core/preflight"
+    "devsandbox/core"
+    "devsandbox/core/preflight"
  
     "github.com/spf13/cobra"
 )

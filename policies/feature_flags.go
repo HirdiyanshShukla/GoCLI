@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"opsai/core/policy"
+	"devsandbox/core/policy"
 )
 
 // FeatureFlags verifies that a feature flag library is declared in dependencies

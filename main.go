@@ -1,6 +1,6 @@
 package main
 
-import "opsai/cmd"
+import "devsandbox/cmd"
 
 func main() {
 	cmd.Execute()

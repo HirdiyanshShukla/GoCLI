@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"opsai/core/policy"
+	"devsandbox/core/policy"
 )
 
 // HealthEndpoint checks that the project exposes a health check route.

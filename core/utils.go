@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"opsai/core/ai"
+	"devsandbox/core/ai"
 )
 
 // AnalyzeProject returns a map indicating project characteristics

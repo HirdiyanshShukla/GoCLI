@@ -1,7 +1,7 @@
 package policy
 
 import (
-	"opsai/core/config"
+	"devsandbox/core/config"
 )
 
 // RunPolicies executes all applicable policies according to the mode in cfg.

@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"opsai/core/ai"
-	"opsai/scaffolding_engine/core/rules"
+	"devsandbox/core/ai"
+	"devsandbox/scaffolding_engine/core/rules"
 )
 
 // AIGeneratorResult holds the output of AI Dockerfile generation.

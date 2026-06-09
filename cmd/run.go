@@ -19,9 +19,9 @@ import (
 
 	"time"
 
-	"opsai/core"
+	"devsandbox/core"
 
-	"opsai/core/ai"
+	"devsandbox/core/ai"
 
 	"github.com/spf13/cobra"
 )
@@ -457,7 +457,8 @@ func monitorKubernetesDeployment(appName string) {
 
 				fmt.Println("⚠️  Could not retrieve pod logs (container may not have started yet).")
 
-				fmt.Println("\033[33m👉 Run 'opsai logs analyze' to diagnose further.\033[0m")
+				cliName := filepath.Base(os.Args[0])
+				fmt.Printf("\033[33m👉 Run '%s logs analyze' to diagnose further.\033[0m\n", cliName)
 
 			}
 
@@ -479,7 +480,8 @@ func monitorKubernetesDeployment(appName string) {
 
 			fmt.Println("\033[1;32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m")
 
-			fmt.Printf("\033[33m👉 Run 'opsai tunnel' to access it at http://localhost:8081\033[0m\n\n")
+			cliName := filepath.Base(os.Args[0])
+			fmt.Printf("\033[33m👉 Run '%s tunnel' to access it at http://localhost:8081\033[0m\n\n", cliName)
 
 		} else {
 
@@ -493,7 +495,8 @@ func monitorKubernetesDeployment(appName string) {
 
 		fmt.Println("\n\033[1;31m❌ Deployment timed out after 5 minutes.\033[0m")
 
-		fmt.Println("\033[33m👉 Run 'opsai logs analyze' to diagnose the issue.\033[0m")
+		cliName2 := filepath.Base(os.Args[0])
+		fmt.Printf("\033[33m👉 Run '%s logs analyze' to diagnose the issue.\033[0m\n", cliName2)
 
 	}
 

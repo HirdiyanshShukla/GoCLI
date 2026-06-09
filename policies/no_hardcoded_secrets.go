@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strings"
 
-	"opsai/core/policy"
+	"devsandbox/core/policy"
 )
 
 // NoHardcodedSecrets scans source files and pipeline.yaml for credentials

@@ -9,9 +9,9 @@ import (
 	"strings"
 	"text/template"
 
-	"opsai/core/config"
-	"opsai/scaffolding_engine/core/detector"
-	"opsai/scaffolding_engine/templates"
+	"devsandbox/core/config"
+	"devsandbox/scaffolding_engine/core/detector"
+	"devsandbox/scaffolding_engine/templates"
 )
 
 func GenerateFiles(framework string, projectPath string, entryPath string, aiResult *detector.AIDetectionResult) error {

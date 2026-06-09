@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"opsai/core/policy"
+	"devsandbox/core/policy"
 )
 
 // ApprovedRegistries ensures all container images come from approved registries.

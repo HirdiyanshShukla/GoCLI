@@ -9,12 +9,12 @@ import (
 	"runtime"
 	"strings"
 
-	"opsai/core"
-	"opsai/core/ai"
-	"opsai/core/config"
-	"opsai/core/policy"
-	"opsai/policies"
-	"opsai/scaffolding_engine/core/detector"
+	"devsandbox/core"
+	"devsandbox/core/ai"
+	"devsandbox/core/config"
+	"devsandbox/core/policy"
+	"devsandbox/policies"
+	"devsandbox/scaffolding_engine/core/detector"
 
 	"github.com/spf13/cobra"
 )

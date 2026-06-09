@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"opsai/core/ai"
+	"devsandbox/core/ai"
 
 	"github.com/spf13/cobra"
 )

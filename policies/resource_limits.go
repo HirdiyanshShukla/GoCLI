@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"opsai/core/policy"
+	"devsandbox/core/policy"
 )
 
 // ResourceLimits ensures that Kubernetes Deployments define CPU and Memory limits

@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"regexp"
 
-	"opsai/core/policy"
+	"devsandbox/core/policy"
 )
 
 // EnvVarSize flags environment variable values over 500 characters.

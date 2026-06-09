@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"opsai/core"
+	"devsandbox/core"
 
 	"github.com/spf13/cobra"
 )

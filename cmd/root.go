@@ -8,9 +8,9 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "opsai",
-	Short: "OpsAI — Your AI-powered DevOps CLI",
-	Long:  `OpsAI is a local CI/CD pipeline and observability CLI tool powered by AI.`,
+	Use:   "devsandbox",
+	Short: "DevSandbox — Your AI-powered local CI/CD CLI",
+	Long:  `DevSandbox is a local CI/CD pipeline and observability CLI tool powered by AI.`,
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.

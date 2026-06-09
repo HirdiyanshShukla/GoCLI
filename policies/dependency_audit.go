@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"opsai/core/policy"
+	"devsandbox/core/policy"
 )
 
 // DependencyAudit checks for banned or deprecated packages in the dependency file.

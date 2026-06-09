@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"opsai/core/policy"
+	"devsandbox/core/policy"
 )
 
 // MandatoryProbes checks that every Kubernetes Deployment manifest defines
