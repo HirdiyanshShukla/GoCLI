@@ -7,8 +7,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"opsai/core"
+	"opsai/core/ai"
 	"opsai/core/config"
 	"opsai/core/policy"
 	"opsai/policies"
@@ -62,6 +64,34 @@ var validateCmd = &cobra.Command{
 
 		if policyFailed {
 			fmt.Println("\n\033[1;31m❌ Validation failed: one or more error-severity policies did not pass.\033[0m")
+			if os.Getenv("GEMINI_API_KEY") != "" {
+				fmt.Println("\n\033[1;35m🤖 Validation failed. Auto-analyzing failures with Gemini AI...\033[0m")
+
+				var builder strings.Builder
+				builder.WriteString("Validation Stage: Evaluating Platform Policies failed.\n")
+				builder.WriteString("Failing Policies:\n")
+				if cfgErr != nil {
+					builder.WriteString(fmt.Sprintf("- Configuration Error: %s\n", cfgErr.Error()))
+				} else {
+					results := policy.RunPolicies(cwd, cfg, policies.All())
+					for _, r := range results {
+						if !r.Passed {
+							builder.WriteString(fmt.Sprintf("- [%s] %s: %s\n", r.Severity, r.PolicyName, r.Message))
+							for _, f := range r.Findings {
+								builder.WriteString(fmt.Sprintf("  Finding: %s:%d - %s\n", f.File, f.Line, f.Detail))
+							}
+						}
+					}
+				}
+
+				analysis, err := ai.AnalyzeLogs(builder.String())
+				if err == nil {
+					ai.PrintAnalysis(analysis)
+					core.AskAndApplyFixes(analysis)
+				} else {
+					fmt.Printf("❌ Auto-analysis failed: %v\n", err)
+				}
+			}
 			os.Exit(1)
 		}
 		fmt.Println("\n\033[1;32m✅ Complete Local Validation Successful! Codebase is secure, compliant, and ready for deployment.\033[0m")

@@ -2,6 +2,9 @@ package ai
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -43,6 +46,51 @@ func PrintAnalysis(result AnalysisResult) {
 	fmt.Println("\033[1;36m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m")
 }
 
+// gatherWorkspaceContext gathers files, git repo status, and dependency metadata for Gemini.
+func gatherWorkspaceContext() string {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "Unknown workspace directory"
+	}
+
+	var builder strings.Builder
+	builder.WriteString(fmt.Sprintf("Current Workspace Directory: %s\n", cwd))
+	builder.WriteString(fmt.Sprintf("Host OS: %s\n", runtime.GOOS))
+
+	// Check if git is initialized
+	_, gitErr := os.Stat(filepath.Join(cwd, ".git"))
+	isGit := gitErr == nil
+	builder.WriteString(fmt.Sprintf("Is Git Repository: %t\n", isGit))
+
+	// List root files
+	files, err := os.ReadDir(cwd)
+	if err == nil {
+		builder.WriteString("Workspace Files:\n")
+		for _, f := range files {
+			if f.IsDir() {
+				builder.WriteString(fmt.Sprintf("  - %s/\n", f.Name()))
+			} else {
+				builder.WriteString(fmt.Sprintf("  - %s\n", f.Name()))
+			}
+		}
+	}
+
+	// Read relevant dependency files if they exist
+	depFiles := []string{"requirements.txt", "package.json", "go.mod", "Dockerfile", "Jenkinsfile"}
+	for _, f := range depFiles {
+		path := filepath.Join(cwd, f)
+		if data, err := os.ReadFile(path); err == nil {
+			content := string(data)
+			if len(content) > 1000 {
+				content = content[:1000] + "\n...[truncated]"
+			}
+			builder.WriteString(fmt.Sprintf("\nContent of %s:\n%s\n", f, content))
+		}
+	}
+
+	return builder.String()
+}
+
 // AnalyzeLogs sends Jenkins or Kubernetes log output to Gemini and returns
 // a structured diagnosis with actionable fix suggestions.
 func AnalyzeLogs(logContent string) (AnalysisResult, error) {
@@ -54,21 +102,31 @@ func AnalyzeLogs(logContent string) (AnalysisResult, error) {
 	}
 	defer client.Close()
 
-	systemPrompt := `You are a DevOps engineer analyzing CI/CD pipeline logs.
-Identify the root cause of the failure and provide specific, actionable fixes.
+	systemPrompt := `You are an expert Principal Site Reliability Engineer (SRE) and DevOps Architect.
+Analyze the provided CI/CD pipeline/command failure logs within the context of the user's workspace.
+Identify the precise root cause and provide specific, actionable, and platform-appropriate fixes.
+
+Follow these strict rules for 'fix_commands':
+1. Tailor the shell commands to the host OS. If host OS is 'darwin' (macOS) and you suggest using 'sed -i', use the macOS-specific syntax: 'sed -i \'\'' ...'.
+2. Check if 'Is Git Repository' is true. If false, DO NOT suggest git commands like 'git push' or 'git commit'.
+3. For python requirements.txt changes, suggest simple text replacement or commands appropriate to modify the file directly, avoiding complex regex if possible.
+4. Keep commands concise, practical, and safe to execute.
+
 Respond with ONLY valid JSON in this exact structure:
 {
-  "root_cause": "string — one sentence describing the exact cause",
+  "root_cause": "string — precise explanation of the root cause",
   "suggestions": ["string", "string"],
-  "fix_commands": ["string — exact shell command to run", "string"]
+  "fix_commands": ["string — exact command to run", "string"]
 }`
 
+	workspaceContext := gatherWorkspaceContext()
+
 	truncated := logContent
-	if len(truncated) > 15000 {
-		truncated = "...[truncated]\n" + truncated[len(truncated)-15000:]
+	if len(truncated) > 12000 {
+		truncated = "...[truncated]\n" + truncated[len(truncated)-12000:]
 	}
 
-	userMessage := fmt.Sprintf("Analyze this pipeline log and return diagnosis JSON:\n\n%s", truncated)
+	userMessage := fmt.Sprintf("Workspace Context:\n%s\n\nFailed Pipeline Logs:\n%s", workspaceContext, truncated)
 
 	responseText, err := client.Complete(systemPrompt, userMessage)
 	if err != nil {

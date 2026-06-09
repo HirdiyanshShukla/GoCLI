@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"opsai/core"
+	"opsai/core/ai"
 	"opsai/scaffolding_engine/core/detector"
 	"opsai/scaffolding_engine/core/generator"
 
@@ -29,6 +31,14 @@ var initCmd = &cobra.Command{
 		aiResult, err := detector.AIDetectFramework(cwd)
 		if err != nil {
 			fmt.Printf("\033[33m⚠️  AI detection failed: %s\033[0m\n", err.Error())
+			if os.Getenv("GEMINI_API_KEY") != "" {
+				fmt.Println("\n\033[1;35m🤖 Auto-analyzing framework detection failure...\033[0m")
+				analysis, analysisErr := ai.AnalyzeLogs(fmt.Sprintf("Init Stage: AI Framework Detection failed.\nError: %v", err))
+				if analysisErr == nil {
+					ai.PrintAnalysis(analysis)
+					core.AskAndApplyFixes(analysis)
+				}
+			}
 			os.Exit(1)
 		}
 
@@ -36,6 +46,14 @@ var initCmd = &cobra.Command{
 		err = generator.GenerateFiles(aiResult.Framework, cwd, aiResult.EntryPath, &aiResult)
 		if err != nil {
 			fmt.Printf("\033[1;31m❌ %s\033[0m\n", err.Error())
+			if os.Getenv("GEMINI_API_KEY") != "" {
+				fmt.Println("\n\033[1;35m🤖 Auto-analyzing scaffolding generation failure...\033[0m")
+				analysis, analysisErr := ai.AnalyzeLogs(fmt.Sprintf("Init Stage: Generating scaffolding files failed for framework '%s'.\nError: %v", aiResult.Framework, err))
+				if analysisErr == nil {
+					ai.PrintAnalysis(analysis)
+					core.AskAndApplyFixes(analysis)
+				}
+			}
 			os.Exit(1)
 		}
 

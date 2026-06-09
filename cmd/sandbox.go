@@ -168,7 +168,7 @@ jenkins:
                     "-u", "root",
                     jenkinsName,
                     "bash", "-c",
-                    `curl -sSL "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash && mv kustomize /usr/local/bin/`,
+                    `ARCH=$(uname -m); if [ "$ARCH" = "x86_64" ]; then ARCH="amd64"; elif [ "$ARCH" = "aarch64" ]; then ARCH="arm64"; fi && curl -sSL -O "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.4.2/kustomize_v5.4.2_linux_${ARCH}.tar.gz" && tar -xzf "kustomize_v5.4.2_linux_${ARCH}.tar.gz" && mv kustomize /usr/local/bin/ && rm "kustomize_v5.4.2_linux_${ARCH}.tar.gz"`,
                 )
  
 // 1. Install Plugins (with speed fixes!)
