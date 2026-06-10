@@ -34,15 +34,18 @@ func RunSetupChecks() {
 	}
 	fmt.Println("\033[1;32m✓\033[0m Docker daemon is active")
 
-	// 3. Verify Hardcoded Ports are Free
-	ports := []int{5001, 8080}
-	for _, port := range ports {
+	// 3. Check default ports — warn if busy; prep-ci will allocate alternates automatically
+	busy := []int{}
+	for _, port := range []int{5001, 8080} {
 		if err := checkPortAvailable(port); err != nil {
-			fmt.Printf("\033[1;31m❌ %s\033[0m\n", err.Error())
-			os.Exit(1)
+			busy = append(busy, port)
 		}
 	}
-	fmt.Println("\033[1;32m✓\033[0m Required network ports (5001, 8080) are available")
+	if len(busy) > 0 {
+		fmt.Printf("\033[33m⚠️  Default ports %v are in use — alternate ports will be allocated automatically\033[0m\n", busy)
+	} else {
+		fmt.Println("\033[1;32m✓\033[0m Default network ports (5001, 8080) are available")
+	}
 }
 
 // CheckInternet ensures the user can reach GitHub and Docker Hub
@@ -59,9 +62,9 @@ func CheckInternet() error {
 	return nil
 }
 
-// checkPortAvailable tries to bind to the port. If it fails, the port is occupied.
+// checkPortAvailable tries to bind to the port on all interfaces (matches Docker publish behavior).
 func checkPortAvailable(port int) error {
-	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
+	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		return fmt.Errorf("Port %d is already in use by another program.\n%s", port, getKillCommandSuggestion(port))
 	}

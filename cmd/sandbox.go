@@ -9,6 +9,7 @@ import (
     "strings"
  
     "devsandbox/core"
+    "devsandbox/core/ports"
     "devsandbox/core/preflight"
  
     "github.com/spf13/cobra"
@@ -26,46 +27,48 @@ var prepCiCmd = &cobra.Command{
  
         // CURRENT PROJECT DIRECTORY
         cwd, _ := os.Getwd()
- 
-        // APP NAME
-        rawName := filepath.Base(cwd)
-        appName := strings.ToLower(rawName)
-        appName = strings.ReplaceAll(appName, "_", "-")
-        appName = strings.ReplaceAll(appName, " ", "-")
- 
+
+        kindExists := kindClusterExists(clusterName)
+        sandboxPorts, err := ports.ResolveSandboxPorts(cwd, kindExists)
+        if err != nil {
+            fmt.Printf("\033[1;31m❌ %s\033[0m\n", err.Error())
+            return
+        }
+
+        fmt.Printf("\033[1;32m✓\033[0m Ports — registry: %s, jenkins: %d, tunnel: %d\n",
+            sandboxPorts.RegistryHost(), sandboxPorts.Jenkins, sandboxPorts.Tunnel)
+
         // 2. REGISTRY
         if !isRegistryRunning() {
             fmt.Println("\n\033[33m⚠️ Local registry not running. Waking it up...\033[0m")
- 
-            err := core.ExecSilent("docker", "start", "local-registry")
- 
-            if err != nil {
-                core.ExecCommand(
-                    "Starting Registry",
-                    true,
-                    true,
-                    "docker", "run",
-                    "-d",
-                    "--restart=always",
-                    "-p", "5001:5000",
-                    "--name", "local-registry",
-                    "-v", "local-registry-data:/var/lib/registry",
-                    "registry:2",
-                )
+
+            removeStoppedContainer("local-registry")
+
+            if err := core.ExecSilent("docker", "start", "local-registry"); err != nil {
+                registryPort := bootRegistryContainer(sandboxPorts.Registry)
+                if registryPort == 0 {
+                    fmt.Println("\033[1;31m❌ Failed to start local registry.\033[0m")
+                    return
+                }
+                sandboxPorts.Registry = registryPort
+                p, _ := ports.Load(cwd)
+                p.Registry = registryPort
+                _ = ports.Save(cwd, p)
+                _ = ports.SyncRegistryToProject(cwd, sandboxPorts.RegistryHost())
             }
         }
  
         fmt.Println("\n\033[1;36m🏗️ Building Kubernetes Sandbox & CI/CD Pipeline...\033[0m")
  
         // KIND CONFIG
-        kindConfig := `
+        kindConfig := fmt.Sprintf(`
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 containerdConfigPatches:
 - |-
-  [plugins."io.containerd.grpc.v1.cri".registry.mirrors."127.0.0.1:5001"]
+  [plugins."io.containerd.grpc.v1.cri".registry.mirrors."%s"]
     endpoint = ["http://local-registry:5000"]
-`
+`, sandboxPorts.RegistryHost())
  
         tempFile, _ := os.CreateTemp("", "kind-config-*.yaml")
         defer os.Remove(tempFile.Name())
@@ -73,6 +76,7 @@ containerdConfigPatches:
         tempFile.WriteString(kindConfig)
         tempFile.Close()
  
+        if !kindExists {
         core.ExecCommand(
             "Creating empty Kind cluster",
             false,
@@ -82,6 +86,9 @@ containerdConfigPatches:
             "--config", tempFile.Name(),
             "--image", "kindest/node:v1.30.0",
         )
+        } else {
+            fmt.Printf("\033[1;32m✓\033[0m Kind cluster '%s' already exists — reusing it\033[0m\n", clusterName)
+        }
  
         core.ExecCommand(
             "Bridging Registry and Kind Networks",
@@ -114,121 +121,27 @@ jenkins:
         cascFile.Close()
  
         if !isJenkinsRunning() {
- 
+
             fmt.Println("\033[1;36m🚀 Launching Jenkins Server (Automated Setup)...\033[0m")
- 
-            err := core.ExecSilent("docker", "start", jenkinsName)
- 
-            if err != nil {
- 
-                homeDir, _ := os.UserHomeDir()
- 
-                // BOOT JENKINS
-                core.ExecCommand(
-                    "Booting Jenkins Container",
-                    true,
-                    false,
-                    "docker", "run",
-                    "-d",
-                    "--restart=always",
-                    "-p", "8080:8080",
-                    "-p", "50000:50000",
-                    "--name", jenkinsName,
-                    "-u", "root",
- 
-                    "-e", fmt.Sprintf("HOST_HOME=%s", homeDir),
-                    "-e", fmt.Sprintf("HOST_PROJECT_PATH=%s", cwd),
-                    "-e", `JAVA_OPTS=-Djenkins.install.runSetupWizard=false`,
-                    "-e", "CASC_JENKINS_CONFIG=/var/jenkins_home/casc.yaml",
- 
-                    "-v", "local-jenkins-data:/var/jenkins_home",
-                    "-v", "/var/run/docker.sock:/var/run/docker.sock",
- 
-                    // MOUNT PROJECT USING SAME HOST PATH
-                    "-v", fmt.Sprintf("%s:%s", cwd, cwd),
-                    "jenkins/jenkins:lts",
-                )
- 
-                core.ExecCommand(
-                    "Installing Docker CLI inside Jenkins (Takes ~2 min)",
-                    false,
-                    false,
-                    "docker", "exec",
-                    "-u", "root",
-                    jenkinsName,
-                    "bash", "-c",
-                    "apt-get update && apt-get install -y docker.io",
-                )
- 
-                core.ExecCommand(
-                    "Installing Kustomize inside Jenkins",
-                    false,
-                    false,
-                    "docker", "exec",
-                    "-u", "root",
-                    jenkinsName,
-                    "bash", "-c",
-                    `ARCH=$(uname -m); if [ "$ARCH" = "x86_64" ]; then ARCH="amd64"; elif [ "$ARCH" = "aarch64" ]; then ARCH="arm64"; fi && curl -sSL -O "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.4.2/kustomize_v5.4.2_linux_${ARCH}.tar.gz" && tar -xzf "kustomize_v5.4.2_linux_${ARCH}.tar.gz" && mv kustomize /usr/local/bin/ && rm "kustomize_v5.4.2_linux_${ARCH}.tar.gz"`,
-                )
- 
-// 1. Install Plugins (with speed fixes!)
-				core.ExecCommand(
-					"Installing Jenkins Plugins (Takes ~2 min)",
-					false,
-					false, // Set to true to see progress
-					"docker", "exec",
-					"-e", "JENKINS_UC_DOWNLOAD_TIMEOUT=60",
-					"-e", "CURL_CONNECTION_TIMEOUT=60",
-					"-e", "JENKINS_UC_DOWNLOAD=https://mirrors.tuna.tsinghua.edu.cn/jenkins",
-					jenkinsName,
-					"jenkins-plugin-cli",
-					"--plugins",
-					"git",
-					"workflow-aggregator",
-					"docker-workflow",
-					"configuration-as-code",
-					"ws-cleanup",
-				)
 
-				// 2. Inject Configuration
-				core.ExecCommand(
-					"Injecting JCasC Configuration",
-					true,
-					false,
-					"docker", "cp",
-					cascFile.Name(),
-					fmt.Sprintf("%s:/var/jenkins_home/casc.yaml", jenkinsName),
-				)
+            removeStoppedContainer(jenkinsName)
 
-				// 3. Restart to apply BOTH plugins and configuration
-				core.ExecCommand(
-					"Applying plugins and configurations",
-					false,
-					true,
-					"docker", "restart", jenkinsName,
-				)
- 
-                fmt.Println("\033[33m⏳ Waiting for Jenkins to fully boot...\033[0m")
- 
-                core.ExecCommand(
-                    "Checking Jenkins API readiness",
-                    false,
-                    true,
-                    "docker", "exec",
-                    jenkinsName,
-                    "bash", "-c",
-                    `until curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/login | grep -q "200"; do sleep 3; done`,
-                )
-
-			}
+            if err := core.ExecSilent("docker", "start", jenkinsName); err != nil {
+                var ok bool
+                sandboxPorts, ok = bootAndProvisionJenkins(cwd, sandboxPorts, cascFile.Name())
+                if !ok {
+                    fmt.Println("\033[1;31m❌ Failed to start Jenkins. Free a port near 8080 or run 'destroy-ci' and retry.\033[0m")
+                    return
+                }
+            }
 
 		} else {
 			fmt.Printf("\033[1;32m✅ Jenkins '%s' is active.\033[0m\n", jenkinsName)
 		}
 
 		fmt.Println("\n\033[1;32m✅ CI/CD Sandbox Infrastructure is LIVE!\033[0m")
-		fmt.Printf("\033[33m👉 Jenkins UI: http://localhost:8080\033[0m\n")
-		fmt.Printf("\033[33m👉 Docker Push API: 127.0.0.1:5001\033[0m\n")
+		fmt.Printf("\033[33m👉 Jenkins UI: %s\033[0m\n", sandboxPorts.JenkinsURL())
+		fmt.Printf("\033[33m👉 Docker Push API: %s\033[0m\n", sandboxPorts.RegistryHost())
 		fmt.Println("\033[33m👉 Credentials: admin / admin\033[0m")
 
 		// --- NEW HANDOFF MESSAGE ---
@@ -275,6 +188,7 @@ var destroyCiCmd = &cobra.Command{
 		// Clean up the temporary local kubeconfig
 		cwd, _ := os.Getwd()
 		os.Remove(filepath.Join(cwd, ".kubeconfig-jenkins"))
+		ports.Clear(cwd)
 
 		fmt.Println("\n\033[1;32m🧹 Infrastructure destroyed safely.\033[0m")
 
@@ -352,14 +266,219 @@ func isJenkinsRunning() bool {
 func isRegistryRunning() bool {
     cmd := exec.Command("docker", "ps", "-q", "-f", "name=local-registry")
     output, err := cmd.Output()
- 
+
     if err != nil {
         return false
     }
- 
+
     return strings.TrimSpace(string(output)) != ""
 }
- 
+
+func kindClusterExists(name string) bool {
+	out, err := exec.Command("kind", "get", "clusters").Output()
+	if err != nil {
+		return false
+	}
+	for _, line := range strings.Split(string(out), "\n") {
+		if strings.TrimSpace(line) == name {
+			return true
+		}
+	}
+	return false
+}
+
+func removeStoppedContainer(name string) {
+	out, _ := exec.Command("docker", "ps", "-q", "-f", fmt.Sprintf("name=%s", name)).Output()
+	if strings.TrimSpace(string(out)) != "" {
+		return
+	}
+	_ = exec.Command("docker", "rm", "-f", name).Run()
+}
+
+func bootRegistryContainer(preferredPort int) int {
+	port := preferredPort
+	for attempt := 0; attempt < 5; attempt++ {
+		if attempt > 0 {
+			next, err := ports.AllocatePort(port + 1)
+			if err != nil {
+				return 0
+			}
+			port = next
+			removeStoppedContainer("local-registry")
+		}
+
+		fmt.Printf("\033[1;36m▶ Booting registry on host port %d...\033[0m\n", port)
+
+		cmd := exec.Command(
+			"docker", "run",
+			"-d",
+			"--restart=always",
+			"-p", fmt.Sprintf("%d:5000", port),
+			"--name", "local-registry",
+			"-v", "local-registry-data:/var/lib/registry",
+			"registry:2",
+		)
+		out, err := cmd.CombinedOutput()
+		if err == nil {
+			fmt.Printf("\033[32m✅ Registry started on port %d\033[0m\n", port)
+			return port
+		}
+
+		output := string(out)
+		if strings.Contains(output, "address already in use") || strings.Contains(output, "ports are not available") {
+			fmt.Printf("\033[33m⚠️  Port %d unavailable at runtime — retrying...\033[0m\n", port)
+			removeStoppedContainer("local-registry")
+			continue
+		}
+
+		fmt.Printf("\033[1;31m❌ Registry boot failed:\033[0m\n%s", output)
+		return 0
+	}
+
+	return 0
+}
+
+func bootJenkinsContainer(cwd, homeDir string, sandboxPorts ports.SandboxPorts) (int, bool) {
+	port := sandboxPorts.Jenkins
+
+	for attempt := 0; attempt < 5; attempt++ {
+		if attempt > 0 {
+			next, err := ports.AllocatePort(port + 1)
+			if err != nil {
+				return 0, false
+			}
+			port = next
+			removeStoppedContainer(jenkinsName)
+		}
+
+		fmt.Printf("\033[1;36m▶ Booting Jenkins on host port %d...\033[0m\n", port)
+
+		cmd := exec.Command(
+			"docker", "run",
+			"-d",
+			"--restart=always",
+			"-p", fmt.Sprintf("%d:8080", port),
+			"-p", fmt.Sprintf("%d:50000", sandboxPorts.JenkinsAgent),
+			"--name", jenkinsName,
+			"-u", "root",
+			"-e", fmt.Sprintf("HOST_HOME=%s", homeDir),
+			"-e", fmt.Sprintf("HOST_PROJECT_PATH=%s", cwd),
+			"-e", `JAVA_OPTS=-Djenkins.install.runSetupWizard=false`,
+			"-e", "CASC_JENKINS_CONFIG=/var/jenkins_home/casc.yaml",
+			"-v", "local-jenkins-data:/var/jenkins_home",
+			"-v", "/var/run/docker.sock:/var/run/docker.sock",
+			"-v", fmt.Sprintf("%s:%s", cwd, cwd),
+			"jenkins/jenkins:lts",
+		)
+		out, err := cmd.CombinedOutput()
+		if err == nil {
+			fmt.Printf("\033[32m✅ Jenkins started on port %d\033[0m\n", port)
+			return port, true
+		}
+
+		output := string(out)
+		if strings.Contains(output, "address already in use") || strings.Contains(output, "ports are not available") {
+			fmt.Printf("\033[33m⚠️  Port %d unavailable at runtime — retrying...\033[0m\n", port)
+			removeStoppedContainer(jenkinsName)
+			continue
+		}
+
+		fmt.Printf("\033[1;31m❌ Jenkins boot failed:\033[0m\n%s", output)
+		return 0, false
+	}
+
+	return 0, false
+}
+
+func bootAndProvisionJenkins(cwd string, sandboxPorts ports.SandboxPorts, cascFilePath string) (ports.SandboxPorts, bool) {
+	homeDir, _ := os.UserHomeDir()
+
+	jenkinsPort, booted := bootJenkinsContainer(cwd, homeDir, sandboxPorts)
+	if !booted {
+		return sandboxPorts, false
+	}
+	sandboxPorts.Jenkins = jenkinsPort
+	if p, err := ports.Load(cwd); err == nil {
+		p.Jenkins = jenkinsPort
+		_ = ports.Save(cwd, p)
+	}
+
+	if !isJenkinsRunning() {
+		fmt.Println("\033[1;31m❌ Jenkins container failed to start.\033[0m")
+		return sandboxPorts, false
+	}
+
+	core.ExecCommand(
+		"Installing Docker CLI inside Jenkins (Takes ~2 min)",
+		false,
+		false,
+		"docker", "exec",
+		"-u", "root",
+		jenkinsName,
+		"bash", "-c",
+		"apt-get update && apt-get install -y docker.io",
+	)
+
+	core.ExecCommand(
+		"Installing Kustomize inside Jenkins",
+		false,
+		false,
+		"docker", "exec",
+		"-u", "root",
+		jenkinsName,
+		"bash", "-c",
+		`ARCH=$(uname -m); if [ "$ARCH" = "x86_64" ]; then ARCH="amd64"; elif [ "$ARCH" = "aarch64" ]; then ARCH="arm64"; fi && curl -sSL -O "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.4.2/kustomize_v5.4.2_linux_${ARCH}.tar.gz" && tar -xzf "kustomize_v5.4.2_linux_${ARCH}.tar.gz" && mv kustomize /usr/local/bin/ && rm "kustomize_v5.4.2_linux_${ARCH}.tar.gz"`,
+	)
+
+	core.ExecCommand(
+		"Installing Jenkins Plugins (Takes ~2 min)",
+		false,
+		false,
+		"docker", "exec",
+		"-e", "JENKINS_UC_DOWNLOAD_TIMEOUT=60",
+		"-e", "CURL_CONNECTION_TIMEOUT=60",
+		"-e", "JENKINS_UC_DOWNLOAD=https://mirrors.tuna.tsinghua.edu.cn/jenkins",
+		jenkinsName,
+		"jenkins-plugin-cli",
+		"--plugins",
+		"git",
+		"workflow-aggregator",
+		"docker-workflow",
+		"configuration-as-code",
+		"ws-cleanup",
+	)
+
+	core.ExecCommand(
+		"Injecting JCasC Configuration",
+		true,
+		false,
+		"docker", "cp",
+		cascFilePath,
+		fmt.Sprintf("%s:/var/jenkins_home/casc.yaml", jenkinsName),
+	)
+
+	core.ExecCommand(
+		"Applying plugins and configurations",
+		false,
+		true,
+		"docker", "restart", jenkinsName,
+	)
+
+	fmt.Println("\033[33m⏳ Waiting for Jenkins to fully boot...\033[0m")
+
+	core.ExecCommand(
+		"Checking Jenkins API readiness",
+		false,
+		true,
+		"docker", "exec",
+		jenkinsName,
+		"bash", "-c",
+		`until curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/login | grep -q "200"; do sleep 3; done`,
+	)
+
+	return sandboxPorts, true
+}
+
 func generateJenkinsKubeConfig(projectPath string) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {

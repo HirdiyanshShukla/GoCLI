@@ -14,26 +14,10 @@ pipeline {
                 """
             }
         }
-        stage('🧪 Run Unit Tests') {
-            steps {
-                echo "Running unit tests in {{ .test_image }}..."
-                sh '''
-                    docker run --rm \
-                    -v ${PROJECT_DIR}:/work \
-                    -w /work \
-                    {{ .test_image }} \
-                    sh -c "{{ .test_command }} || true"
-                '''
-            }
-        }
-        stage('🔒 Security Scan (Checkov)') {
-            steps {
-                echo "Scanning Infrastructure as Code..."
-                sh """
-                docker run --rm -v ${PROJECT_DIR}:/work bridgecrew/checkov -d /work --skip-path k8s/overlays --quiet || true
-                """
-            }
-        }
+        
+        // 🧪 Unit Tests and 🔒 Checkov stages removed! 
+        // Developers should run 'opsai validate' locally before 'opsai run'.
+
         stage('📦 Tag & Push to Registry') {
             steps {
                 script {

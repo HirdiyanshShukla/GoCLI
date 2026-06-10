@@ -47,7 +47,7 @@ var logsAnalyzeCmd = &cobra.Command{
 					appName = strings.ReplaceAll(appName, " ", "-")
 
 					fmt.Printf("\033[1;36m🔎 Attempting to auto-fetch latest logs from local Jenkins for '%s'...\033[0m\n", appName)
-					url := fmt.Sprintf("http://localhost:8080/job/%s/lastBuild/consoleText", appName)
+					url := fmt.Sprintf("%s/job/%s/lastBuild/consoleText", loadSandboxPorts().JenkinsURL(), appName)
 					req, err := http.NewRequest("GET", url, nil)
 					if err == nil {
 						req.SetBasicAuth("admin", "admin")

@@ -20,8 +20,8 @@ import (
 	"time"
 
 	"devsandbox/core"
-
 	"devsandbox/core/ai"
+	"devsandbox/core/ports"
 
 	"github.com/spf13/cobra"
 )
@@ -163,13 +163,13 @@ done
 
 		}
 
+		sandboxPorts := loadSandboxPorts()
 		fmt.Printf("\n\033[1;32m✅ Build triggered!\033[0m\n")
-
-		fmt.Printf("\033[33m👉 Track it live at: http://localhost:8080/job/%s\033[0m\n", appName)
+		fmt.Printf("\033[33m👉 Track it live at: %s/job/%s\033[0m\n", sandboxPorts.JenkinsURL(), appName)
 
 		// Wait for Jenkins to finish BEFORE checking Kubernetes
 
-		waitForJenkinsBuild(appName)
+		waitForJenkinsBuild(appName, sandboxPorts)
 
 	},
 }
@@ -180,11 +180,11 @@ func init() {
 
 }
 
-func waitForJenkinsBuild(appName string) {
+func waitForJenkinsBuild(appName string, sandboxPorts ports.SandboxPorts) {
 	fmt.Printf("\n\033[1;36m⏳ Waiting for Jenkins CI pipeline to start...\033[0m\n")
 
 	client := &http.Client{Timeout: 5 * time.Second}
-	url := fmt.Sprintf("http://localhost:8080/job/%s/lastBuild/api/json", appName)
+	url := fmt.Sprintf("%s/job/%s/lastBuild/api/json", sandboxPorts.JenkinsURL(), appName)
 
 	buildAnnounced := false
 
@@ -227,7 +227,7 @@ func waitForJenkinsBuild(appName string) {
 			return
 		} else {
 			fmt.Printf("\n\033[1;31m❌ Jenkins CI Build #%d failed (Result: %s)\033[0m\n", buildStatus.Number, buildStatus.Result)
-			consoleUrl := fmt.Sprintf("http://localhost:8080/job/%s/lastBuild/consoleText", appName)
+			consoleUrl := fmt.Sprintf("%s/job/%s/lastBuild/consoleText", sandboxPorts.JenkinsURL(), appName)
 			logReq, err := http.NewRequest("GET", consoleUrl, nil)
 			if err == nil {
 				logReq.SetBasicAuth("admin", "admin")

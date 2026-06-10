@@ -53,8 +53,9 @@ var resumeCmd = &cobra.Command{
 		core.ExecCommand("Starting Jenkins", false, true,
 			"docker", "start", "local-jenkins")
 
+		sandboxPorts := loadSandboxPorts()
 		fmt.Println("\n\033[1;32m✅ Sandbox is back online.\033[0m")
-		fmt.Printf("\033[33m👉 Jenkins UI: http://localhost:8080\033[0m\n")
+		fmt.Printf("\033[33m👉 Jenkins UI: %s\033[0m\n", sandboxPorts.JenkinsURL())
 		fmt.Println("\033[33m👉 Credentials: admin / admin\033[0m")
 	},
 }

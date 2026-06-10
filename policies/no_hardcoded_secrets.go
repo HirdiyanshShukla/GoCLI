@@ -10,8 +10,6 @@ import (
 	"devsandbox/core/policy"
 )
 
-// NoHardcodedSecrets scans source files and pipeline.yaml for credentials
-// assigned to string literals.
 type NoHardcodedSecrets struct{}
 
 func (p *NoHardcodedSecrets) Name() string        { return "no-hardcoded-secrets" }
@@ -19,13 +17,12 @@ func (p *NoHardcodedSecrets) DisplayName() string { return "No Hardcoded Secrets
 func (p *NoHardcodedSecrets) Category() string    { return "security" }
 func (p *NoHardcodedSecrets) Severity() string    { return "error" }
 func (p *NoHardcodedSecrets) Description() string {
-	return "Scans all source files and pipeline.yaml for hardcoded passwords, tokens, API keys, and other credentials assigned to string literal values."
+	return "Scans all source files, pipeline.yaml, and .env files for hardcoded passwords, tokens, API keys, and other credentials."
 }
 
-// secretVarPattern matches variable assignments where the variable name is
-// a known secret word and the value is a non-empty string literal.
+// Updated regex: Matches secrets with OR without quotes.
 var secretVarPattern = regexp.MustCompile(
-	`(?i)(password|passwd|secret|api_key|apikey|token|private_key|auth_token)\s*[=:]\s*["']([^"']+)["']`,
+	`(?i)(password|passwd|secret|api_key|apikey|token|private_key|auth_token)\s*[=:]\s*["']?([^"'\s]+)["']?`,
 )
 
 func (p *NoHardcodedSecrets) Run(projectPath string, _ map[string]map[string]interface{}) policy.PolicyResult {
@@ -36,13 +33,12 @@ func (p *NoHardcodedSecrets) Run(projectPath string, _ map[string]map[string]int
 	}
 
 	var findings []policy.Finding
-
-	// Collect all source files + pipeline.yaml
 	var filesToScan []string
+
 	walkSourceFiles(projectPath, func(path string) {
 		filesToScan = append(filesToScan, path)
 	})
-	// Always scan pipeline.yaml regardless of ignoreDirs
+
 	pipelineYaml := filepath.Join(projectPath, "pipeline.yaml")
 	if _, err := os.Stat(pipelineYaml); err == nil {
 		filesToScan = append(filesToScan, pipelineYaml)
@@ -56,7 +52,6 @@ func (p *NoHardcodedSecrets) Run(projectPath string, _ map[string]map[string]int
 		rel, _ := filepath.Rel(projectPath, filePath)
 		for lineNum, line := range lines {
 			trimmed := strings.TrimSpace(line)
-			// Skip comment lines
 			if strings.HasPrefix(trimmed, "#") || strings.HasPrefix(trimmed, "//") || strings.HasPrefix(trimmed, "*") {
 				continue
 			}
