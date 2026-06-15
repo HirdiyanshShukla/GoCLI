@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"bytes"
+
 	"encoding/json"
 
 	"fmt"
@@ -8,6 +10,7 @@ import (
 	"io"
 
 	"net/http"
+	"net/http/cookiejar"
 
 	"os"
 
@@ -70,100 +73,23 @@ var runCmd = &cobra.Command{
 
 		}
 
-		// Wrap in pipeline job XML
-
+		// Generate the pipeline wrapper XML body cleanly in memory
 		scriptContent := fmt.Sprintf("<![CDATA[%s]]>", string(jenkinsfileBytes))
-
-		jobXML := fmt.Sprintf(`<?xml version='1.1' encoding='UTF-8'?>
+		jobXML := []byte(fmt.Sprintf(`<?xml version='1.1' encoding='UTF-8'?>
 <flow-definition plugin="workflow-job">
-<definition class="org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition" plugin="workflow-cps">
-<script>%s</script>
-<sandbox>true</sandbox>
-</definition>
-</flow-definition>`, scriptContent)
-
-		xmlFile, _ := os.CreateTemp("", "job-*.xml")
-
-		defer os.Remove(xmlFile.Name())
-
-		xmlFile.WriteString(jobXML)
-
-		xmlFile.Close()
-
-		// Jenkins API script
-
-		apiScript := fmt.Sprintf(`#!/bin/bash
-
-set -e
-
-APP_NAME="%s"
-
-CRUMB=$(curl -s -c /tmp/cookies.txt -u admin:admin "http://localhost:8080/crumbIssuer/api/xml?xpath=concat(//crumbRequestField,\":\",//crumb)")
- 
-STATUS=$(curl -s -o /dev/null -w "%%{http_code}" -u admin:admin -b /tmp/cookies.txt "http://localhost:8080/job/${APP_NAME}/api/json")
- 
-if [ "$STATUS" -eq 404 ]; then
-  # Create new job
-  curl -s -X POST "http://localhost:8080/createItem?name=${APP_NAME}" \
-    -u admin:admin -b /tmp/cookies.txt -H "$CRUMB" \
-    -H "Content-Type:text/xml" --data-binary @/tmp/job.xml > /dev/null
-else
-  # Update existing job
-  curl -s -X POST "http://localhost:8080/job/${APP_NAME}/config.xml" \
-    -u admin:admin -b /tmp/cookies.txt -H "$CRUMB" \
-    -H "Content-Type:text/xml" --data-binary @/tmp/job.xml > /dev/null
-fi
- 
-NEXT_BUILD=$(curl -s -u admin:admin -b /tmp/cookies.txt "http://localhost:8080/job/${APP_NAME}/api/json" | grep -o '"nextBuildNumber":[0-9]*' | cut -d':' -f2 || true)
- 
-curl -s -X POST "http://localhost:8080/job/${APP_NAME}/build" \
-  -u admin:admin -b /tmp/cookies.txt -H "$CRUMB" > /dev/null
- 
-for i in {1..15}; do
-  LAST_BUILD=$(curl -s -u admin:admin -b /tmp/cookies.txt "http://localhost:8080/job/${APP_NAME}/api/json" | grep -o '"lastBuild":{"_class":"[^"]*","number":[0-9]*' | grep -o '[0-9]*$' || true)
-  if [ "$LAST_BUILD" == "$NEXT_BUILD" ]; then
-    break
-  fi
-  sleep 1
-done
-
-`, appName)
-
-		scriptFile, _ := os.CreateTemp("", "run-*.sh")
-
-		defer os.Remove(scriptFile.Name())
-
-		scriptFile.WriteString(apiScript)
-
-		scriptFile.Close()
-
-		if err := exec.Command("docker", "cp", xmlFile.Name(), "local-jenkins:/tmp/job.xml").Run(); err != nil {
-
-			fmt.Println("\033[1;31m❌ Failed to inject job definition into Jenkins.\033[0m")
-
-			return
-
-		}
-
-		if err := exec.Command("docker", "cp", scriptFile.Name(), "local-jenkins:/tmp/run.sh").Run(); err != nil {
-
-			fmt.Println("\033[1;31m❌ Failed to inject build script into Jenkins.\033[0m")
-
-			return
-
-		}
-
-		execCmd := exec.Command("docker", "exec", "local-jenkins", "bash", "/tmp/run.sh")
-
-		if err := execCmd.Run(); err != nil {
-
-			fmt.Println("\033[1;31m❌ Build trigger failed. Check Jenkins is healthy.\033[0m")
-
-			return
-
-		}
+  <definition class="org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition" plugin="workflow-cps">
+    <script>%s</script>
+    <sandbox>true</sandbox>
+  </definition>
+</flow-definition>`, scriptContent))
 
 		sandboxPorts := loadSandboxPorts()
+		if err := triggerJenkinsJob(appName, sandboxPorts.Jenkins, jobXML); err != nil {
+			fmt.Printf("\033[1;31m\u274c Build trigger failed: %v\033[0m\n", err)
+			return
+		}
+
+		
 		fmt.Printf("\n\033[1;32m✅ Build triggered!\033[0m\n")
 		fmt.Printf("\033[33m👉 Track it live at: %s/job/%s\033[0m\n", sandboxPorts.JenkinsURL(), appName)
 
@@ -172,6 +98,85 @@ done
 		waitForJenkinsBuild(appName, sandboxPorts)
 
 	},
+}
+
+func triggerJenkinsJob(appName string, jenkinsPort int, jobXML []byte) error {
+	baseURL := fmt.Sprintf("http://localhost:%d", jenkinsPort)
+
+	// FIX 1: CookieJar maintains the JSESSIONID so the CSRF crumb stays valid
+	jar, _ := cookiejar.New(nil)
+	client := &http.Client{
+		Timeout: 15 * time.Second,
+		Jar:     jar,
+	}
+
+	// Step 1 — get CSRF crumb
+	crumbReq, _ := http.NewRequest("GET", baseURL+"/crumbIssuer/api/json", nil)
+	crumbReq.SetBasicAuth("admin", "admin")
+	crumbResp, err := client.Do(crumbReq)
+	if err != nil {
+		return fmt.Errorf("could not reach Jenkins: %w", err)
+	}
+	defer crumbResp.Body.Close()
+
+	var crumbData struct {
+		Crumb             string `json:"crumb"`
+		CrumbRequestField string `json:"crumbRequestField"`
+	}
+	json.NewDecoder(crumbResp.Body).Decode(&crumbData)
+
+	addAuth := func(req *http.Request) {
+		req.SetBasicAuth("admin", "admin")
+		if crumbData.CrumbRequestField != "" {
+			req.Header.Set(crumbData.CrumbRequestField, crumbData.Crumb)
+		}
+	}
+
+	// Step 2 — check if job exists
+	checkReq, _ := http.NewRequest("GET", fmt.Sprintf("%s/job/%s/api/json", baseURL, appName), nil)
+	addAuth(checkReq)
+	checkResp, _ := client.Do(checkReq)
+
+	var createOrUpdateReq *http.Request
+	if checkResp != nil && checkResp.StatusCode == 200 {
+		checkResp.Body.Close()
+		createOrUpdateReq, _ = http.NewRequest("POST", fmt.Sprintf("%s/job/%s/config.xml", baseURL, appName), bytes.NewReader(jobXML))
+	} else {
+		if checkResp != nil {
+			checkResp.Body.Close()
+		}
+		createOrUpdateReq, _ = http.NewRequest("POST", fmt.Sprintf("%s/createItem?name=%s", baseURL, appName), bytes.NewReader(jobXML))
+	}
+
+	createOrUpdateReq.Header.Set("Content-Type", "application/xml")
+	addAuth(createOrUpdateReq)
+	resp, err := client.Do(createOrUpdateReq)
+	if err != nil {
+		return fmt.Errorf("failed to send job config: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// FIX 2: Explicitly check for Jenkins HTTP rejections
+	if resp.StatusCode >= 400 {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("jenkins rejected job config (Status %d): %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	// Step 3 — trigger build
+	buildReq, _ := http.NewRequest("POST", fmt.Sprintf("%s/job/%s/build", baseURL, appName), nil)
+	addAuth(buildReq)
+	buildResp, err := client.Do(buildReq)
+	if err != nil {
+		return fmt.Errorf("failed to trigger build: %w", err)
+	}
+	defer buildResp.Body.Close()
+
+	if buildResp.StatusCode >= 400 {
+		bodyBytes, _ := io.ReadAll(buildResp.Body)
+		return fmt.Errorf("jenkins rejected build trigger (Status %d): %s", buildResp.StatusCode, string(bodyBytes))
+	}
+
+	return nil
 }
 
 func init() {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"runtime"
 
 	"github.com/google/generative-ai-go/genai"
 	"google.golang.org/api/option"
@@ -17,12 +18,19 @@ type Client struct {
 	model  *genai.GenerativeModel
 }
 
+// getEnvSetInstruction returns the platform-correct shell command to set an env variable.
+func getEnvSetInstruction(varName string) string {
+	if runtime.GOOS == "windows" {
+		return fmt.Sprintf("PowerShell: $env:%s = \"your-key-here\"\n   CMD:        set %s=your-key-here", varName, varName)
+	}
+	return fmt.Sprintf("export %s=your-key-here", varName)
+}
+
 // NewClient creates a new Gemini client. Reads GEMINI_API_KEY from env.
 func NewClient() (*Client, error) {
 	apiKey := os.Getenv("GEMINI_API_KEY")
 	if apiKey == "" {
-		return nil, fmt.Errorf("GEMINI_API_KEY environment variable is not set.\n" +
-			"   Set it with: export GEMINI_API_KEY=your-key-here")
+		return nil, fmt.Errorf("GEMINI_API_KEY environment variable is not set.\n   Set it using:\n   %s", getEnvSetInstruction("GEMINI_API_KEY"))
 	}
 
 	ctx := context.Background()

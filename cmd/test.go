@@ -102,6 +102,15 @@ func init() {
 	rootCmd.AddCommand(validateCmd)
 }
 
+// mvnCommand returns the platform-appropriate Maven wrapper command.
+// On Windows the .cmd batch wrapper is required; on Linux/macOS/WSL the shell script is used.
+func mvnCommand() string {
+	if runtime.GOOS == "windows" {
+		return "mvnw.cmd"
+	}
+	return "./mvnw"
+}
+
 func lintCode() {
 	cwd, _ := os.Getwd()
 	framework := detector.DetectFramework(cwd)
@@ -122,7 +131,7 @@ func lintCode() {
 		}
 	case "java_springboot":
 		if _, err := os.Stat(filepath.Join(cwd, "mvnw")); err == nil {
-			core.ExecCommand("Code Linting", true, true, "./mvnw", "checkstyle:check")
+			core.ExecCommand("Code Linting", true, true, mvnCommand(), "checkstyle:check")
 		} else {
 			fmt.Println("\033[33m⚠️  ./mvnw not found. Please ensure you are at the project root.\033[0m")
 		}
@@ -160,7 +169,7 @@ func unitTests() {
 		}
 	case "java_springboot":
 		if _, err := os.Stat(filepath.Join(cwd, "mvnw")); err == nil {
-			core.ExecCommand("Unit Testing", true, true, shell, shellFlag, "./mvnw test")
+			core.ExecCommand("Unit Testing", true, true, shell, shellFlag, mvnCommand()+" test")
 		} else {
 			fmt.Println("\033[33m⚠️  ./mvnw not found.\033[0m")
 		}
@@ -194,7 +203,7 @@ func lintDocker() {
 	cwd, _ := os.Getwd()
 	if project["has_docker"] {
 		fmt.Println("Linting Dockerfile...")
-		core.ExecCommand("Hadolint Docker Check", true, false, "docker", "run", "--rm", "-v", fmt.Sprintf("%s:/work", cwd), "-w", "/work", "hadolint/hadolint", "hadolint", "Dockerfile")
+		core.ExecCommand("Hadolint Docker Check", true, false, "docker", "run", "--rm", "-v", fmt.Sprintf("%s:/work", core.ToDockerPath(cwd)), "-w", "/work", "hadolint/hadolint", "hadolint", "Dockerfile")
 	} else {
 		fmt.Println("No Dockerfile found. Skipping.")
 	}
@@ -221,7 +230,7 @@ func lintK8s() {
 		tempFile.Write(output)
 		tempFile.Close()
 
-		core.ExecCommand("Kubeconform K8s Validation", true, false, "docker", "run", "--rm", "-v", fmt.Sprintf("%s:/manifest.yaml", tempFile.Name()), "ghcr.io/yannh/kubeconform:latest", "-strict", "-summary", "/manifest.yaml")
+		core.ExecCommand("Kubeconform K8s Validation", true, false, "docker", "run", "--rm", "-v", fmt.Sprintf("%s:/manifest.yaml", core.ToDockerPath(tempFile.Name())), "ghcr.io/yannh/kubeconform:latest", "-strict", "-summary", "/manifest.yaml")
 	} else {
 		fmt.Println("No Kubernetes manifests found. Skipping.")
 	}
@@ -232,7 +241,7 @@ func securityScan() {
 	cwd, _ := os.Getwd()
 	if project["has_docker"] || project["has_k8s"] {
 		fmt.Println("Running Checkov Security Scan on IaC...")
-		core.ExecCommand("Checkov Security Audit", true, false, "docker", "run", "--rm", "-v", fmt.Sprintf("%s:/work", cwd), "bridgecrew/checkov", "-d", "/work", "--framework", "dockerfile", "kubernetes", "github_actions", "--skip-check", "CKV_K8S_14,CKV_K8S_43,CKV2_K8S_6,CKV2_GHA_1,CKV_K8S_40,CKV_K8S_31", "--skip-path", "env", "--skip-path", "venv", "--skip-path", "node_modules", "--skip-path", ".git", "--skip-path", "k8s/overlays", "--quiet", "--compact")
+		core.ExecCommand("Checkov Security Audit", true, false, "docker", "run", "--rm", "-v", fmt.Sprintf("%s:/work", core.ToDockerPath(cwd)), "bridgecrew/checkov", "-d", "/work", "--framework", "dockerfile", "kubernetes", "github_actions", "--skip-check", "CKV_K8S_14,CKV_K8S_43,CKV2_K8S_6,CKV2_GHA_1,CKV_K8S_40,CKV_K8S_31", "--skip-path", "env", "--skip-path", "venv", "--skip-path", "node_modules", "--skip-path", ".git", "--skip-path", "k8s/overlays", "--quiet", "--compact")
 	} else {
 		fmt.Println("No infrastructure files found for security scan. Skipping.")
 	}

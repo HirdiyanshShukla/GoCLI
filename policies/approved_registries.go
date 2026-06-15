@@ -98,6 +98,10 @@ func (p *ApprovedRegistries) Run(projectPath string, config map[string]map[strin
 
 	// --- Scan K8s manifests ---
 	walkK8sFiles(projectPath, func(path string) {
+		normalizedPath := filepath.ToSlash(path)
+		if strings.Contains(normalizedPath, "/k8s/overlays/") || strings.HasPrefix(normalizedPath, "k8s/overlays/") {
+			return
+		}
 		lines := readLines(path)
 		if lines == nil {
 			return

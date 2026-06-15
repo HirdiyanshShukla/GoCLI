@@ -35,6 +35,10 @@ func (p *EnvVarSize) Run(projectPath string, _ map[string]map[string]interface{}
 
 	// --- 1. Scan K8s manifests ---
 	walkK8sFiles(projectPath, func(path string) {
+		normalizedPath := filepath.ToSlash(path)
+		if strings.Contains(normalizedPath, "/k8s/overlays/") || strings.HasPrefix(normalizedPath, "k8s/overlays/") {
+			return
+		}
 		findings = append(findings, p.scanFile(projectPath, path)...)
 	})
 

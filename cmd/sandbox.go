@@ -367,6 +367,7 @@ func bootJenkinsContainer(cwd, homeDir string, sandboxPorts ports.SandboxPorts) 
 			"-e", "CASC_JENKINS_CONFIG=/var/jenkins_home/casc.yaml",
 			"-v", "local-jenkins-data:/var/jenkins_home",
 			"-v", "/var/run/docker.sock:/var/run/docker.sock",
+			"--add-host=host.docker.internal:host-gateway", // Crucial network bridge for Linux/WSL
 			"-v", fmt.Sprintf("%s:%s", cwd, cwd),
 			"jenkins/jenkins:lts",
 		)

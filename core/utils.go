@@ -17,6 +17,29 @@ import (
 	"devsandbox/core/ai"
 )
 
+// ToDockerPath converts an OS path to a Docker-compatible mount path.
+// On Windows/WSL environments using Docker Desktop, it normalizes drive letters.
+// On Linux and macOS it is a no-op.
+func ToDockerPath(path string) string {
+	if runtime.GOOS != "windows" {
+		return path
+	}
+	slashed := filepath.ToSlash(path)
+	if len(slashed) >= 2 && slashed[1] == ':' {
+		return "/" + strings.ToLower(string(slashed[0])) + slashed[2:]
+	}
+	return slashed
+}
+
+// IsWSL checks if the current Linux environment is running inside Windows Subsystem for Linux.
+func IsWSL() bool {
+	data, err := os.ReadFile("/proc/version")
+	if err != nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(string(data)), "microsoft")
+}
+
 // AnalyzeProject returns a map indicating project characteristics
 func AnalyzeProject() map[string]bool {
 	cwd, _ := os.Getwd()

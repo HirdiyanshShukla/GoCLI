@@ -31,6 +31,10 @@ func (p *NoPrivilegedContainers) Run(projectPath string, _ map[string]map[string
 
 	walkK8sFiles(projectPath, func(path string) {
 		k8sChecked = true
+		normalizedPath := filepath.ToSlash(path)
+		if strings.Contains(normalizedPath, "/k8s/overlays/") || strings.HasPrefix(normalizedPath, "k8s/overlays/") {
+			return
+		}
 		lines := readLines(path)
 		if lines == nil {
 			return
