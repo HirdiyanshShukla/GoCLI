@@ -65,7 +65,7 @@ func GenerateFiles(framework string, projectPath string, entryPath string, aiRes
 			"app_name":     appName,
 			"app_port":     8080,
 			"java_version": "17",
-			"run_command":  `["sh", "-c", "java -jar target/*.jar"]`,
+			"run_command":  `["java", "-jar", "/app.jar"]`,
 			"health_path":  "/actuator/health",
 			"test_command": `./mvnw test`,
 		},
@@ -142,7 +142,7 @@ func GenerateFiles(framework string, projectPath string, entryPath string, aiRes
 		hasDockerfileTemplate := templateErr == nil
 
 		if !hasDockerfileTemplate {
-			aiDockerfile, err := AIGenerateDockerfile(projectPath, finalVars)
+			aiDockerfile, err := AIGenerateDockerfileWithValidation(projectPath, finalVars, aiResult)
 			if err != nil {
 				return fmt.Errorf("AI Dockerfile generation failed: %w", err)
 			}
@@ -152,6 +152,21 @@ func GenerateFiles(framework string, projectPath string, entryPath string, aiRes
 					return fmt.Errorf("failed to write AI Dockerfile: %w", err)
 				}
 				fmt.Println("Generated", dockerfilePath)
+				// --- ADD THIS: Auto-generate a safe .dockerignore ---
+			dockerignorePath := filepath.Join(projectPath, ".dockerignore")
+			if _, statErr := os.Stat(dockerignorePath); os.IsNotExist(statErr) {
+				defaultDockerignore := `node_modules
+										.git
+										.env
+										dist
+										build
+										coverage
+										Dockerfile
+`
+				if err := os.WriteFile(dockerignorePath, []byte(defaultDockerignore), 0644); err == nil {
+					fmt.Println("Generated", dockerignorePath)
+				}
+			}
 			} else {
 				fmt.Printf("⚠️  Skipping existing file (already customized): Dockerfile\n")
 			}

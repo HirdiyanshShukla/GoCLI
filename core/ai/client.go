@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"time"
 
 	"github.com/google/generative-ai-go/genai"
 	"google.golang.org/api/option"
@@ -78,4 +79,18 @@ func (c *Client) Complete(systemPrompt, userMessage string) (string, error) {
 // parseJSON is a helper used by both the client and log analyzer.
 func parseJSON(data string, v interface{}) error {
 	return json.Unmarshal([]byte(data), v)
+}
+
+// CompleteWithRetry wraps Complete with a simple retry loop for network blips.
+func (c *Client) CompleteWithRetry(systemPrompt, userMessage string, maxRetries int) (string, error) {
+	var lastErr error
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		resp, err := c.Complete(systemPrompt, userMessage)
+		if err == nil {
+			return resp, nil
+		}
+		lastErr = err
+		time.Sleep(time.Duration(attempt) * time.Second)
+	}
+	return "", fmt.Errorf("API request failed after %d attempts. Last error: %w", maxRetries, lastErr)
 }
