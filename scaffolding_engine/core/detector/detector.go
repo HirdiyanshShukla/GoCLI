@@ -1,6 +1,7 @@
 package detector
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -77,4 +78,47 @@ func DetectFramework(projectPath string) string {
 		}
 	}
 	return "unknown"
+}
+
+
+// DetectEcosystem identifies the broad language/runtime ecosystem
+func DetectEcosystem(projectPath string) string {
+	exists := func(name string) bool {
+		_, err := os.Stat(filepath.Join(projectPath, name))
+		return err == nil
+	}
+
+	switch {
+	case exists("package.json"):
+		return "node"
+	case exists("requirements.txt") || exists("pyproject.toml") || exists("Pipfile"):
+		return "python"
+	case exists("go.mod"):
+		return "go"
+	case exists("Cargo.toml"):
+		return "rust"
+	case exists("pom.xml") || exists("build.gradle") || exists("build.gradle.kts"):
+		return "java"
+	case exists("Gemfile"):
+		return "ruby"
+	case exists("composer.json"):
+		return "php"
+	}
+	return "unknown"
+}
+
+// HasNpmScript checks if a specific script exists in package.json
+func HasNpmScript(projectPath, scriptName string) bool {
+	data, err := os.ReadFile(filepath.Join(projectPath, "package.json"))
+	if err != nil {
+		return false
+	}
+	var pkg struct {
+		Scripts map[string]string `json:"scripts"`
+	}
+	if json.Unmarshal(data, &pkg) != nil {
+		return false
+	}
+	_, ok := pkg.Scripts[scriptName]
+	return ok
 }

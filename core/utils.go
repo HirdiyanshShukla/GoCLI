@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -183,6 +184,72 @@ func AskAndApplyFixes(result ai.AnalysisResult) {
 	}
 }
 
+
+
+// ExecCommandTracked behaves like ExecCommand but never calls os.Exit and
+// returns whether the command succeeded. Used by validate stages that must
+// continue through all checks and report an aggregate pass/fail at the end.
+func ExecCommandTracked(stepName string, executable string, args ...string) bool {
+	fmt.Printf("\n\033[1;36m▶ Running: %s...\033[0m\n", stepName)
+	cmd := exec.Command(executable, args...)
+
+	var outBuf bytes.Buffer
+	multiWriter := io.MultiWriter(os.Stdout, &outBuf)
+	cmd.Stdout = multiWriter
+	cmd.Stderr = multiWriter
+
+	err := cmd.Run()
+	if err != nil {
+		fmt.Printf("\033[1;31m❌ %s failed.\033[0m\n", stepName)
+		if os.Getenv("GEMINI_API_KEY") != "" {
+			contextStr := fmt.Sprintf("Step: %s\nOutput:\n%s", stepName, outBuf.String())
+			analysis, err := ai.AnalyzeLogs(contextStr)
+			if err == nil {
+				ai.PrintAnalysis(analysis)
+			}
+		}
+		return false
+	}
+	fmt.Printf("\033[32m✅ %s completed perfectly!\033[0m\n", stepName)
+	return true
+}
+
+// RunInContainer executes an install+run command sequence inside an ephemeral
+// container, mounting the project at /work. Returns true on success.
+func RunInContainer(stepName, image, installCmd, runCmd, cacheVolume, cacheMount string) bool {
+	if err := exec.Command("docker", "info").Run(); err != nil {
+		fmt.Printf("\033[1;31m❌ Docker is not running — required for: %s\033[0m\n", stepName)
+		fmt.Println("Start Docker, then retry.")
+		return false
+	}
+
+	// The new cool boot sequence indicator
+	fmt.Printf("\033[36m   [Docker] ⏳ Booting sterile '%s' environment...\033[0m\n", image)
+
+	cwd, _ := os.Getwd()
+	dockerPath := ToDockerPath(cwd)
+	fullCmd := runCmd
+
+	if installCmd != "" {
+		fullCmd = installCmd + " && " + runCmd
+	}
+
+	args := []string{"run", "--rm", "-v", fmt.Sprintf("%s:/work", dockerPath), "-w", "/work"}
+	if cacheVolume != "" && cacheMount != "" {
+		args = append(args, "-v", fmt.Sprintf("%s:%s", cacheVolume, cacheMount))
+	}
+	args = append(args, image, "sh", "-c", fullCmd)
+
+	return ExecCommandTracked(stepName, "docker", args...)
+}
+
+// SanitizeForDocker strips characters Docker volume names don't accept.
+func SanitizeForDocker(name string) string {
+	lower := strings.ToLower(name)
+	re := regexp.MustCompile(`[^a-z0-9-]`)
+	return strings.Trim(re.ReplaceAllString(lower, "-"), "-")
+}
+
 // RequireProjectRoot ensures the user is executing the command from
 // the root of the repository by looking for pipeline.yaml.
 func RequireProjectRoot(cwd string) {
@@ -226,3 +293,5 @@ func PollEndpoint(ctx context.Context, url string, timeout time.Duration, interv
 		}
 	}
 }
+
+

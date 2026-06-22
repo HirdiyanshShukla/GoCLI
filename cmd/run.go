@@ -56,7 +56,7 @@ var runCmd = &cobra.Command{
 </definition>
 </flow-definition>`, scriptContent)
 
-		xmlFile, _ := os.CreateTemp(".", "job-*.xml")
+		xmlFile, _ := os.CreateTemp("", "job-*.xml")
 		defer os.Remove(xmlFile.Name())
 		xmlFile.WriteString(jobXML)
 		xmlFile.Close()
@@ -97,7 +97,7 @@ for i in {1..15}; do
 done
 `, appName)
 
-		scriptFile, _ := os.CreateTemp(".", "run-*.sh")
+		scriptFile, _ := os.CreateTemp("", "run-*.sh")
 		defer os.Remove(scriptFile.Name())
 		scriptFile.WriteString(apiScript)
 		scriptFile.Close()
@@ -215,7 +215,7 @@ func monitorKubernetesDeployment(appName string) {
 			Reason  string `json:"reason"`
 			Message string `json:"message"`
 		} `json:"waiting"`
-		Running *struct{} `json:"running"`
+		Running    *struct{} `json:"running"`
 		Terminated *struct {
 			Reason string `json:"reason"`
 		} `json:"terminated"`
@@ -260,13 +260,13 @@ func monitorKubernetesDeployment(appName string) {
 
 		out, err := exec.Command("kubectl", "get", "pods", "-n", namespace, "-o", "json").Output()
 		if err != nil {
-			fmt.Printf("\033[33m⏳ Waiting for pods to appear... (%ds)\033[0m\r", (attempt+1)*5)
+			fmt.Printf("\033[33m⏳ Waiting for pods to appear... (%ds)\033[0m\033[K\r", (attempt+1)*5)
 			continue
 		}
 
 		var podList PodList
 		if jsonErr := json.Unmarshal(out, &podList); jsonErr != nil || len(podList.Items) == 0 {
-			fmt.Printf("\033[33m⏳ No pods found yet... (%ds)\033[0m\r", (attempt+1)*5)
+			fmt.Printf("\033[33m⏳ No pods found yet... (%ds)\033[0m\033[K\r", (attempt+1)*5)
 			continue
 		}
 
@@ -369,7 +369,26 @@ func monitorKubernetesDeployment(appName string) {
 			cliName := filepath.Base(os.Args[0])
 			fmt.Printf("\033[33m👉 Run '%s tunnel' to access it at http://localhost:8081\033[0m\n\n", cliName)
 		} else {
-			fmt.Printf("\033[33m⏳ Pods initializing... (%ds elapsed)\033[0m\r", (attempt+1)*5)
+			// 🔥 THE FIX: Surface the exact waiting reason
+			statusDetail := podPhase
+			if statusDetail == "" {
+				statusDetail = "Pods initializing"
+			}
+			for _, pod := range podList.Items {
+				if pod.Metadata.DeletionTimestamp != nil {
+					continue
+				}
+				for _, cs := range pod.Status.ContainerStatuses {
+					if cs.State.Waiting != nil && cs.State.Waiting.Reason != "" {
+						statusDetail = cs.State.Waiting.Reason
+					} else if cs.Ready {
+						statusDetail = "Running (ready)"
+					} else if pod.Status.Phase == "Running" {
+						statusDetail = "Running, waiting on readiness probe"
+					}
+				}
+			}
+			fmt.Printf("\033[33m⏳ %s... (%ds elapsed)\033[0m\033[K\r", statusDetail, (attempt+1)*5)
 		}
 	}
 
