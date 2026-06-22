@@ -22,9 +22,14 @@ RUN apk add --no-cache curl && \
         /etc/nginx/conf.d \
         /var/run/nginx.pid
 
-# Satisfy Checkov Security Scanner (Ignored by K8s, used by pure Docker)
-HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-    CMD curl --fail http://localhost:{{ .app_port }}/ || exit 1
+# Satisfy Checkov Security Scanner intelligently
+{{- if .health_path }}
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD curl --fail http://localhost:{{ .app_port }}{{ .health_path }} || exit 1
+{{- else }}
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD bash -c 'echo > /dev/tcp/localhost/{{ .app_port }}' || exit 1
+{{- end }}
 
 USER appuser
 

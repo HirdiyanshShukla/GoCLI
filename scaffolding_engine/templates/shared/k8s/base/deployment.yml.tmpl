@@ -52,6 +52,7 @@ spec:
             limits:
               cpu: "500m"
               memory: "512Mi"
+{{- if .health_path }}
           readinessProbe:
             httpGet:
               path: {{ .health_path }}
@@ -65,6 +66,19 @@ spec:
             initialDelaySeconds: 15
             periodSeconds: 20
             failureThreshold: 3
+{{- else }}
+          readinessProbe:
+            tcpSocket:
+              port: {{ .app_port }}
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: {{ .app_port }}
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            failureThreshold: 3
+{{- end }}
           volumeMounts:
             - name: tmp-volume
               mountPath: /tmp

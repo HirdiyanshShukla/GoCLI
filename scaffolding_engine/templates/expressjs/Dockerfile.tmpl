@@ -11,9 +11,14 @@ RUN apk add --no-cache curl && \
     addgroup -S appgroup && adduser -S appuser -G appgroup && chown -R appuser /usr/src/app
 USER appuser
 
-# 🩺 Healthcheck for Docker Checkov compliance
+# Satisfy Checkov Security Scanner intelligently
+{{- if .health_path }}
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD curl --fail http://localhost:{{ .app_port }}{{ .health_path }} || exit 1
+{{- else }}
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD bash -c 'echo > /dev/tcp/localhost/{{ .app_port }}' || exit 1
+{{- end }}
 
 EXPOSE {{ .app_port }}
 

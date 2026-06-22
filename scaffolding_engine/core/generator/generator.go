@@ -34,7 +34,7 @@ func GenerateFiles(framework string, projectPath string, entryPath string, aiRes
 			"app_port":       8000,
 			"python_version": "3.12",
 			"run_command":    fmt.Sprintf(`["python", "%s", "runserver", "0.0.0.0:8000"]`, entryPath),
-			"health_path":    "/",
+			"health_path":    "", // Empty string triggers the TCP socket fallback
 			"test_command":   fmt.Sprintf(`python %s test`, entryPath),
 		},
 		"fastapi": {
@@ -126,11 +126,6 @@ func GenerateFiles(framework string, projectPath string, entryPath string, aiRes
 	// so the pipeline doesn't crash on a <no value> template evaluation.
 	if finalVars["test_image"] == nil || finalVars["test_image"] == "" {
 		finalVars["test_image"] = "alpine:3.19"
-	}
-
-	// ADD THIS: Ensure health_path never goes to the template as nil
-	if finalVars["health_path"] == nil || finalVars["health_path"] == "" {
-		finalVars["health_path"] = "/"
 	}
 
 	// ── 4. Generate Dockerfile via AI only if no template exists ─────────────

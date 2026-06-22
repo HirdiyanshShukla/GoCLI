@@ -394,7 +394,28 @@ func monitorKubernetesDeployment(appName string) {
 
 	if !finished {
 		fmt.Println("\n\033[1;31m❌ Deployment timed out after 5 minutes.\033[0m")
-		cliName2 := filepath.Base(os.Args[0])
-		fmt.Printf("\033[33m👉 Run '%s logs analyze' to diagnose the issue.\033[0m\n", cliName2)
+
+		// Attempt to find the name of the stuck pod
+		podNameCmd := exec.Command("kubectl", "get", "pods", "-n", namespace, "-o", "jsonpath={.items[0].metadata.name}")
+		podNameBytes, _ := podNameCmd.Output()
+		podName := string(podNameBytes)
+
+		if podName != "" {
+			fmt.Printf("🔎 Fetching logs from stuck pod '%s' and invoking AI Log Analyzer...\n", podName)
+			logCmd2 := exec.Command("kubectl", "logs", podName, "-n", namespace, "--tail=100")
+			logOutput2, _ := logCmd2.CombinedOutput()
+
+			if len(logOutput2) > 0 {
+				fmt.Println("\033[1;36m🤖 Analyzing pod logs...\033[0m")
+				analysis, err := ai.AnalyzeLogs(string(logOutput2))
+				if err == nil {
+					ai.PrintAnalysis(analysis)
+					core.AskAndApplyFixes(analysis)
+				}
+			}
+		} else {
+			cliName2 := filepath.Base(os.Args[0])
+			fmt.Printf("\033[33m👉 Run '%s logs analyze' to diagnose the issue.\033[0m\n", cliName2)
+		}
 	}
 }
