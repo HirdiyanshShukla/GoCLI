@@ -29,7 +29,7 @@ func (p *ResourceLimits) Run(projectPath string, _ map[string]map[string]interfa
 	var findings []policy.Finding
 
 	walkK8sFiles(projectPath, func(path string) {
-		// 💡 THE FIX: Skip Kustomize patches
+		// THE FIX: Skip Kustomize patches
 		normalizedPath := filepath.ToSlash(path)
 		if strings.Contains(normalizedPath, "/k8s/overlays/") || strings.HasPrefix(normalizedPath, "k8s/overlays/") {
 			return

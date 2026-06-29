@@ -74,7 +74,7 @@ func (p *NoLatestTag) Run(projectPath string, _ map[string]map[string]interface{
 	// --- Scan K8s YAML manifests via walkK8sFiles ---
 	walkK8sFiles(projectPath, func(path string) {
 		
-		// 💡 THE FIX: Skip base manifests — they intentionally use :latest as a Kustomize placeholder.
+		// THE FIX: Skip base manifests — they intentionally use :latest as a Kustomize placeholder.
 		// We use ToSlash to handle Windows paths safely, and check both relative and absolute patterns.
 		normalizedPath := filepath.ToSlash(path)
 		if strings.Contains(normalizedPath, "/k8s/base/") || strings.HasPrefix(normalizedPath, "k8s/base/") {

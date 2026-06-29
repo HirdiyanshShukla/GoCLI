@@ -110,7 +110,7 @@ func handleError(err error, stepName string, ignoreErrors bool, output string) {
 }
 
 func triggerAutoAnalysis(stepName string, output string, originalErr error) {
-	fmt.Println("\n\033[1;35m🤖 Terminal crashed. Auto-analyzing failure with Gemini AI...\033[0m")
+	fmt.Println("\n\033[1;35mTerminal crashed. Auto-analyzing failure with Gemini AI...\033[0m")
 
 	contextStr := fmt.Sprintf("Step: %s\n", stepName)
 	if originalErr != nil {
@@ -137,7 +137,7 @@ func AskAndApplyFixes(result ai.AnalysisResult) {
 	}
 
 	fmt.Println()
-	fmt.Println("\033[1;32m🔧 Actionable Fixes Found:\033[0m")
+	fmt.Println("\033[1;32mActionable Fixes Found:\033[0m")
 
 	var shell, flag string
 	if runtime.GOOS == "windows" {
@@ -157,7 +157,7 @@ func AskAndApplyFixes(result ai.AnalysisResult) {
 		}
 
 		fmt.Printf("\n\033[1;33m[%d/%d] Suggested Command:\033[0m \033[1;37m%s\033[0m\n", i+1, len(result.FixCommands), trimmedCmd)
-		fmt.Print("👉 Do you want to run this command? (y/N): ")
+		fmt.Print("Do you want to run this command? (y/N): ")
 
 		response, err := reader.ReadString('\n')
 		if err != nil {
@@ -177,7 +177,7 @@ func AskAndApplyFixes(result ai.AnalysisResult) {
 				fmt.Printf("\033[1;31m❌ Command failed: %v\033[0m\n", err)
 				os.Exit(1)
 			}
-			fmt.Println("\033[1;32m✓ Command completed successfully.\033[0m")
+			fmt.Println("\033[1;32mCommand completed successfully.\033[0m")
 		} else {
 			fmt.Println("\033[90mSkipped.\033[0m")
 		}
@@ -224,7 +224,7 @@ func RunInContainer(stepName, image, installCmd, runCmd, cacheVolume, cacheMount
 	}
 
 	// The new cool boot sequence indicator
-	fmt.Printf("\033[36m   [Docker] ⏳ Booting sterile '%s' environment...\033[0m\n", image)
+	fmt.Printf("\033[36m   [Docker] Booting sterile '%s' environment...\033[0m\n", image)
 
 	cwd, _ := os.Getwd()
 	dockerPath := ToDockerPath(cwd)
@@ -256,7 +256,7 @@ func RequireProjectRoot(cwd string) {
 	yamlPath := filepath.Join(cwd, "pipeline.yaml")
 	if _, err := os.Stat(yamlPath); os.IsNotExist(err) {
 		fmt.Println("\033[1;31m❌ Error: Project configuration not found.\033[0m")
-		fmt.Println("\033[33m💡 Suggestion: Please ensure you are running this command from the root directory of your project (where pipeline.yaml is located).\033[0m")
+		fmt.Println("\033[33mSuggestion: Please ensure you are running this command from the root directory of your project (where pipeline.yaml is located).\033[0m")
 		os.Exit(1)
 	}
 }

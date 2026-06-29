@@ -26,13 +26,13 @@ var initCmd = &cobra.Command{
 			return
 		}
 
-		fmt.Println("\033[1;36m🤖 Analyzing project structure and inferring configuration...\033[0m")
+		fmt.Println("\033[1;36mAnalyzing project structure and inferring configuration...\033[0m")
 
 		aiResult, err := detector.AIDetectFramework(cwd)
 		if err != nil {
 			fmt.Printf("\033[33m⚠️  AI detection failed: %s\033[0m\n", err.Error())
 			if os.Getenv("GEMINI_API_KEY") != "" {
-				fmt.Println("\n\033[1;35m🤖 Auto-analyzing framework detection failure...\033[0m")
+				fmt.Println("\n\033[1;35mAuto-analyzing framework detection failure...\033[0m")
 				analysis, analysisErr := ai.AnalyzeLogs(fmt.Sprintf("Init Stage: AI Framework Detection failed.\nError: %v", err))
 				if analysisErr == nil {
 					ai.PrintAnalysis(analysis)
@@ -47,7 +47,7 @@ var initCmd = &cobra.Command{
 		if err != nil {
 			fmt.Printf("\033[1;31m❌ %s\033[0m\n", err.Error())
 			if os.Getenv("GEMINI_API_KEY") != "" {
-				fmt.Println("\n\033[1;35m🤖 Auto-analyzing scaffolding generation failure...\033[0m")
+				fmt.Println("\n\033[1;35mAuto-analyzing scaffolding generation failure...\033[0m")
 				analysis, analysisErr := ai.AnalyzeLogs(fmt.Sprintf("Init Stage: Generating scaffolding files failed for framework '%s'.\nError: %v", aiResult.Framework, err))
 				if analysisErr == nil {
 					ai.PrintAnalysis(analysis)
@@ -57,7 +57,7 @@ var initCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		fmt.Println("\n\033[1;32m✨ Scaffolding generation successful!\033[0m")
+		fmt.Println("\n\033[1;32mScaffolding generation successful!\033[0m")
 
 		yamlPath := filepath.Join(cwd, "pipeline.yaml")
 		if _, statErr := os.Stat(yamlPath); os.IsNotExist(statErr) {
@@ -65,13 +65,13 @@ var initCmd = &cobra.Command{
 			if writeErr := os.WriteFile(yamlPath, []byte(yamlContent), 0644); writeErr != nil {
 				fmt.Printf("\033[33m⚠️  Could not write pipeline.yaml: %v\033[0m\n", writeErr)
 			} else {
-				fmt.Println("\033[1;32m✓\033[0m Generated starter pipeline.yaml")
+				fmt.Println("\033[1;32m\033[0m Generated starter pipeline.yaml")
 			}
 		} else {
 			fmt.Println("⚠️  pipeline.yaml already exists — skipping (your customizations are preserved)")
 		}
 
-		fmt.Println("\n\033[1;33m❓ Do you want to boot the local CI/CD sandbox for this project?\033[0m")
+		fmt.Println("\n\033[1;33mDo you want to boot the local CI/CD sandbox for this project?\033[0m")
 		fmt.Print("This takes ~5 minutes. (y/N): ")
 
 		reader := bufio.NewReader(os.Stdin)

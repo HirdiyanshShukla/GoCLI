@@ -6,78 +6,86 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"devsandbox/core"
+	"devsandbox/core/ai"
 	"devsandbox/core/config"
+	"devsandbox/core/finops"
 	"devsandbox/core/policy"
 	"devsandbox/policies"
 	"devsandbox/scaffolding_engine/core/detector"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 var validateCmd = &cobra.Command{
 	Use:   "validate",
 	Short: "Runs comprehensive local validation (Code, Docker, K8s, Security, and Policies)",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("\033[1;36m🔍 Commencing Comprehensive Local Validation...\033[0m")
+		fmt.Println("\033[1;36mCommencing Comprehensive Local Validation...\033[0m")
 
-		fmt.Println("\n\033[1;34m📋 Stage 1: Running Code Quality Linters...\033[0m")
+		fmt.Println("\n\033[1;34mStage 1: Running Code Quality Linters...\033[0m")
 		codeLintOK := lintCode()
 
-		fmt.Println("\n\033[1;34m🧪 Stage 2: Executing Unit Test Suites...\033[0m")
+		fmt.Println("\n\033[1;34mStage 2: Executing Unit Test Suites...\033[0m")
 		testsOK := unitTests()
 
-		fmt.Println("\n\033[1;34m🐳 Stage 3: Linting Dockerfile...\033[0m")
+		fmt.Println("\n\033[1;34mStage 3: Linting Dockerfile...\033[0m")
 		dockerOK := lintDocker()
 
-		fmt.Println("\n\033[1;34m☸️  Stage 4: Validating Kubernetes Manifests...\033[0m")
+		fmt.Println("\n\033[1;34m\u26a0\ufe0f  Stage 4: Validating Kubernetes Manifests...\033[0m")
 		k8sOK := lintK8s()
 
-		fmt.Println("\n\033[1;34m🔒 Stage 5: Running Security Scans...\033[0m")
+		fmt.Println("\n\033[1;34mStage 5: Running Security Scans...\033[0m")
 		securityOK := securityScan()
 
-		fmt.Println("\n\033[1;34m🛡️  Stage 6: Evaluating Platform Policies...\033[0m")
+		fmt.Println("\n\033[1;34m\u26a0\ufe0f  Stage 6: Evaluating Platform Policies...\033[0m")
 		cwd, _ := os.Getwd()
 		cfg, cfgErr := config.LoadConfig(cwd)
 		policyFailed := false
 		if cfgErr != nil {
-			fmt.Printf("\033[1;31m❌ %s\033[0m\n", cfgErr.Error())
+			fmt.Printf("\033[1;31m\u274c %s\033[0m\n", cfgErr.Error())
 			policyFailed = true
 		} else {
 			results := policy.RunPolicies(cwd, cfg, policies.All())
 			policyFailed = policy.PrintReport(results)
 		}
 
+		fmt.Println("\n\U0001f4ca Stage 7: FinOps Budget Predictor...")
+		finopsCheck()
+
 		// Aggregate all failures and print a deterministic summary
 		if policyFailed || !codeLintOK || !testsOK || !dockerOK || !k8sOK || !securityOK {
-			fmt.Println("\n\033[1;31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m")
-			fmt.Println("\033[1;31m❌ VALIDATION FAILED: Action Required\033[0m")
-			fmt.Println("\033[1;31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m")
+			fmt.Println("\n\033[1;31m\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\033[0m")
+			fmt.Println("\033[1;31m\u274c VALIDATION FAILED: Action Required\033[0m")
+			fmt.Println("\033[1;31m\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\033[0m")
 
 			if !codeLintOK {
-				fmt.Println(" 👉 \033[33mCode Quality:\033[0m Fix the linter errors printed in Stage 1.")
+				fmt.Println(" \033[33mCode Quality:\033[0m Fix the linter errors printed in Stage 1.")
 			}
 			if !testsOK {
-				fmt.Println(" 👉 \033[33mUnit Tests:\033[0m Fix the failing tests printed in Stage 2.")
+				fmt.Println(" \033[33mUnit Tests:\033[0m Fix the failing tests printed in Stage 2.")
 			}
 			if !dockerOK {
-				fmt.Println(" 👉 \033[33mDockerfile:\033[0m Resolve the Hadolint warnings printed in Stage 3.")
+				fmt.Println(" \033[33mDockerfile:\033[0m Resolve the Hadolint warnings printed in Stage 3.")
 			}
 			if !k8sOK {
-				fmt.Println(" 👉 \033[33mKubernetes:\033[0m Fix the Kubeconform validation errors in Stage 4.")
+				fmt.Println(" \033[33mKubernetes:\033[0m Fix the Kubeconform validation errors in Stage 4.")
 			}
 			if !securityOK {
-				fmt.Println(" 👉 \033[33mSecurity:\033[0m Address the Checkov IaC vulnerabilities in Stage 5.")
+				fmt.Println(" \033[33mSecurity:\033[0m Address the Checkov IaC vulnerabilities in Stage 5.")
 			}
 			if policyFailed {
-				fmt.Println(" 👉 \033[33mPlatform Policies:\033[0m Review the Policy Check table above to resolve compliance issues.")
+				fmt.Println(" \033[33mPlatform Policies:\033[0m Review the Policy Check table above to resolve compliance issues.")
 			}
 
-			fmt.Println("\n\033[36mRun 'devsandbox validate' again after applying fixes.\033[0m")
+			fmt.Println("\n\033[36mRun 'validate command' again after applying fixes.\033[0m")
 			os.Exit(1)
 		}
-		fmt.Println("\n\033[1;32m✅ Complete Local Validation Successful! Codebase is secure, compliant, and ready for deployment.\033[0m")
+
+		fmt.Println("\n\033[1;32m\u2705 Complete Local Validation Successful! Codebase is secure, compliant, and ready for deployment.\033[0m")
 	},
 }
 
@@ -88,35 +96,38 @@ func init() {
 func getTestImage(cwd, ecosystem string) (image string, isMaven bool, isGradle bool) {
 	cfg, _ := config.LoadConfig(cwd)
 	switch ecosystem {
-	case "python":
-		v := "3.12"
-		if cfg.App.PythonVersion != "" {
-			v = cfg.App.PythonVersion
-		}
-		return fmt.Sprintf("python:%s-slim", v), false, false
 	case "node":
-		v := "22"
-		if cfg.App.NodeVersion != "" {
-			v = cfg.App.NodeVersion
+		nodeVer := cfg.App.NodeVersion
+		if nodeVer == "" {
+			nodeVer = "22"
 		}
-		return fmt.Sprintf("node:%s-alpine", v), false, false
-	case "java":
-		v := "17"
-		if cfg.App.JavaVersion != "" {
-			v = cfg.App.JavaVersion
+		return "node:" + nodeVer + "-alpine", false, false
+	case "python":
+		pyVer := cfg.App.PythonVersion
+		if pyVer == "" {
+			pyVer = "3.12"
 		}
-		if _, err := os.Stat(filepath.Join(cwd, "pom.xml")); err == nil {
-			return fmt.Sprintf("maven:3.9-eclipse-temurin-%s-alpine", v), true, false
-		}
-		return fmt.Sprintf("eclipse-temurin:%s-alpine", v), false, true
+		return "python:" + pyVer + "-slim", false, false
 	case "go":
-		return "golang:1.22-alpine", false, false
+		return "golang:1.24-alpine", false, false
 	case "rust":
-		return "rust:1-slim", false, false
-	case "ruby":
-		return "ruby:3.3-alpine", false, false
+		return "rust:alpine", false, false
+	case "java":
+		javaVer := cfg.App.JavaVersion
+		if javaVer == "" {
+			javaVer = "17"
+		}
+		_, maven := func() (bool, bool) {
+			_, errM := os.Stat(filepath.Join(cwd, "pom.xml"))
+			_, errG := os.Stat(filepath.Join(cwd, "build.gradle"))
+			return errM == nil, errG == nil
+		}()
+		if maven {
+			return "maven:" + javaVer + "-eclipse-temurin-" + javaVer, true, false
+		}
+		return "gradle:jdk" + javaVer, false, true
 	}
-	return "", false, false
+	return "alpine:3.19", false, false
 }
 
 func lintCode() bool {
@@ -127,7 +138,7 @@ func lintCode() bool {
 	switch ecosystem {
 	case "node":
 		if !detector.HasNpmScript(cwd, "lint") {
-			fmt.Println("ℹ️  No 'lint' script in package.json. Skipping code linting.")
+			fmt.Println("\u2139\ufe0f  No 'lint' script found in package.json. Skipping code linting.")
 			return true
 		}
 		image, _, _ := getTestImage(cwd, ecosystem)
@@ -151,7 +162,8 @@ func lintCode() bool {
 	case "python":
 		image, _, _ := getTestImage(cwd, ecosystem)
 		return core.RunInContainer("Code Linting", image,
-			"pip install --quiet --disable-pip-version-check --break-system-packages flake8", "flake8 .",
+			"pip install --quiet --disable-pip-version-check --break-system-packages flake8",
+			"flake8 --exclude=venv,.venv,env,.env,node_modules,.git,__pycache__ .",
 			"devsandbox-pip-cache-"+appName, "/root/.cache/pip")
 
 	case "go":
@@ -173,7 +185,7 @@ func lintCode() bool {
 		}
 		if isGradle {
 			if _, err := os.Stat(filepath.Join(cwd, "gradlew")); err != nil {
-				fmt.Println("ℹ️  No gradlew wrapper found. Skipping code linting for Gradle.")
+				fmt.Println("\u2139\ufe0f  No gradlew wrapper found. Skipping code linting for Gradle.")
 				return true
 			}
 			return core.RunInContainer("Code Linting", image, "",
@@ -183,7 +195,7 @@ func lintCode() bool {
 		return true
 
 	default:
-		fmt.Println("ℹ️  No default linter configured for this ecosystem. Skipping code linting.")
+		fmt.Println("\u2139\ufe0f  No default linter configured for this ecosystem. Skipping code linting.")
 		return true
 	}
 }
@@ -203,9 +215,9 @@ func unitTests() bool {
 	switch ecosystem {
 	case "node":
 		if !detector.HasNpmScript(cwd, "test") {
-			fmt.Println("\033[1;33m⚠️  CRITICAL WARNING: No 'test' script found in package.json.\033[0m")
+			fmt.Println("\033[1;33m\u26a0\ufe0f  CRITICAL WARNING: No 'test' script found in package.json.\033[0m")
 			fmt.Println("\033[1;33m   Unit tests are highly recommended before production deployment.\033[0m")
-			return true 
+			return true
 		}
 		image, _, _ := getTestImage(cwd, ecosystem)
 		pm := detector.DetectPackageManager(cwd)
@@ -253,7 +265,7 @@ func unitTests() bool {
 		}
 		if isGradle {
 			if _, err := os.Stat(filepath.Join(cwd, "gradlew")); err != nil {
-				fmt.Println("ℹ️  No gradlew wrapper found. Skipping tests for Gradle.")
+				fmt.Println("\u2139\ufe0f  No gradlew wrapper found. Skipping tests for Gradle.")
 				return true
 			}
 			return core.RunInContainer("Unit Testing", image, "",
@@ -268,24 +280,24 @@ func unitTests() bool {
 }
 
 func runCustomTestCommand(cwd string) bool {
-	fmt.Println("ℹ️  Custom framework detected. Consulting pipeline.yaml contract...")
+	fmt.Println("\u2139\ufe0f  Custom framework detected. Consulting pipeline.yaml contract...")
 
 	yamlPath := filepath.Join(cwd, "pipeline.yaml")
 	if _, err := os.Stat(yamlPath); os.IsNotExist(err) {
 		cliName := filepath.Base(os.Args[0])
-		fmt.Printf("\033[1;31m❌ pipeline.yaml missing. Please execute '%s init' first.\033[0m\n", cliName)
+		fmt.Printf("\033[1;31m\u274c pipeline.yaml missing. Please execute '%s init' first.\033[0m\n", cliName)
 		return false
 	}
 
 	userConfig, err := config.LoadConfig(cwd)
 	if err != nil {
-		fmt.Printf("\033[1;31m❌ Configuration Error: %s\033[0m\n", err.Error())
+		fmt.Printf("\033[1;31m\u274c Configuration Error: %s\033[0m\n", err.Error())
 		return false
 	}
 
 	extractedCmd := userConfig.App.TestCommand
 	if extractedCmd == "" || extractedCmd == "your-test-command" || extractedCmd == "echo 'No tests defined'" {
-		fmt.Println("\033[1;33m⚠️  No custom validation or test_command found in pipeline.yaml. Skipping code test layer.\033[0m")
+		fmt.Println("\033[1;33m\u26a0\ufe0f  No custom validation or test_command found in pipeline.yaml. Skipping code test layer.\033[0m")
 		return true
 	}
 
@@ -309,7 +321,7 @@ func lintK8s() bool {
 		overlayPath := filepath.Join(cwd, "k8s/overlays/local")
 		if _, err := os.Stat(overlayPath); os.IsNotExist(err) {
 			cliName := filepath.Base(os.Args[0])
-			fmt.Printf("\033[33m⚠️  No Kustomize overlays found. Please run '%s init' first to generate manifests.\033[0m\n", cliName)
+			fmt.Printf("\033[33m\u26a0\ufe0f  No Kustomize overlays found. Please run '%s init' first to generate manifests.\033[0m\n", cliName)
 			return false
 		}
 
@@ -335,4 +347,160 @@ func securityScan() bool {
 	}
 	fmt.Println("No infrastructure files found for security scan. Skipping.")
 	return true
+}
+
+// finopsCheck is Stage 7 - advisory only, never calls os.Exit.
+// It renders the prod Kustomize overlay, estimates monthly cost using hardcoded
+// on-demand rates, and optionally asks Gemini for structural optimizations.
+func finopsCheck() {
+	cwd, _ := os.Getwd()
+	if !core.AnalyzeProject()["has_k8s"] {
+		return // no K8s manifests - nothing to estimate
+	}
+
+	manifestYAML, err := finops.RenderProdManifest(cwd)
+	if err != nil {
+		fmt.Println("\u2139\ufe0f  Could not render prod overlay for cost estimate. Skipping.")
+		return
+	}
+
+	containers, replicas, _ := finops.ParseContainerResources(manifestYAML)
+	if len(containers) == 0 {
+		return
+	}
+	totals := finops.SumResources(containers, replicas)
+
+	cfg, _ := config.LoadConfig(cwd)
+	region := cfg.App.FinOpsRegion // "" falls back to "default" rates inside MonthlyCost
+	currentCost := finops.MonthlyCost(totals, region)
+
+	fmt.Printf("\n\033[1;34m\U0001f4ca Estimated Monthly Cost: $%.2f\033[0m\n", currentCost)
+	fmt.Println("\033[90m   Estimate based on generic on-demand pricing; actual cost varies by provider, region, and commitment tier.\033[0m")
+
+	hash := finops.HashTotals(totals)
+	cached, found := finops.LoadCache(cwd)
+	if found && cached.Hash == hash {
+		fmt.Println("\033[90m   (cached - resource allocations unchanged since last check)\033[0m")
+		if len(cached.Mutations) > 0 {
+			fmt.Println("\033[1;33m\U0001f4a1 Previously found optimizations (unchanged):\033[0m")
+			for _, m := range cached.Mutations {
+				fmt.Printf("   \u2022 [%s] %s: %s -> %s\n", m.ContainerName, m.FieldPath, m.OldValue, m.NewValue)
+			}
+			fmt.Println("\033[90m   Run with --finops-refresh to re-analyze, or apply manually.\033[0m")
+		} else {
+			fmt.Println("\033[1;32m\u2713\033[0m No cost optimizations found (cached).")
+		}
+		return
+	}
+
+	var names []string
+	for _, c := range containers {
+		names = append(names, c.Name)
+	}
+	framework := detector.DetectFramework(cwd) // reuse existing static detector
+
+	mutations, err := ai.AnalyzeFinOps(manifestYAML, framework, names)
+	if err != nil {
+		fmt.Printf("\033[33m\u26a0\ufe0f  FinOps AI analysis unavailable: %v\033[0m\n", err)
+		finops.SaveCache(cwd, finops.CacheEntry{Hash: hash, CurrentCost: currentCost})
+		return
+	}
+
+	if len(mutations) == 0 {
+		fmt.Println("\033[1;32m\u2713\033[0m No cost optimizations found - allocations look reasonable.")
+		finops.SaveCache(cwd, finops.CacheEntry{Hash: hash, CurrentCost: currentCost})
+		return
+	}
+
+	fmt.Println("\033[1;33m\U0001f4a1 Suggested optimizations:\033[0m")
+	for _, m := range mutations {
+		fmt.Printf("   \u2022 [%s] %s: %s -> %s\n", m.ContainerName, m.FieldPath, m.OldValue, m.NewValue)
+		fmt.Printf("     %s\n", m.Reasoning)
+	}
+
+	// Apply mutations to an in-memory copy of totals to recompute optimized cost.
+	// Never trust AI-stated dollar figures; none are requested here anyway.
+	optimizedTotals := totals
+	for _, m := range mutations {
+		applyMutationToTotals(&optimizedTotals, m)
+	}
+	optimizedCost := finops.MonthlyCost(optimizedTotals, region)
+	delta := currentCost - optimizedCost
+	if delta > 0 {
+		fmt.Printf("\033[1;32m   Estimated optimized cost: $%.2f (saving $%.2f/mo)\033[0m\n", optimizedCost, delta)
+	} else {
+		fmt.Printf("\033[1;33m   Estimated cost with safer allocation: $%.2f (+$%.2f/mo for stability)\033[0m\n", optimizedCost, -delta)
+	}
+
+	if term.IsTerminal(int(os.Stdin.Fd())) {
+		fmt.Print("\n\U0001f449 Apply these cost-saving changes now? [y/N]: ")
+		var input string
+		fmt.Scanln(&input)
+		if strings.ToLower(strings.TrimSpace(input)) == "y" {
+			manifestPath := filepath.Join(cwd, "k8s", "base", "deployment.yml")
+			for _, m := range mutations {
+				if err := finops.ApplyMutation(manifestPath, m.ContainerName, m.FieldPath, m.NewValue); err != nil {
+					fmt.Printf("\033[1;31m\u274c Could not apply mutation: %v\033[0m\n", err)
+				}
+			}
+			fmt.Println("\033[1;32m\u2713\033[0m Applied. Re-run validate to confirm.")
+		}
+	}
+
+	var cachedMutations []finops.CachedMutation
+	for _, m := range mutations {
+		cachedMutations = append(cachedMutations, finops.CachedMutation{
+			ContainerName: m.ContainerName,
+			FieldPath:     m.FieldPath,
+			OldValue:      m.OldValue,
+			NewValue:      m.NewValue,
+			Reasoning:     m.Reasoning,
+			ChangeType:    m.ChangeType,
+		})
+	}
+	finops.SaveCache(cwd, finops.CacheEntry{Hash: hash, CurrentCost: currentCost, Mutations: cachedMutations})
+}
+
+// applyMutationToTotals updates an in-memory ResourceTotals based on one FinOpsMutation.
+// Only requests fields affect cost (limits don't factor into MonthlyCost).
+func applyMutationToTotals(totals *finops.ResourceTotals, m ai.FinOpsMutation) {
+	switch m.FieldPath {
+	case "requests.cpu":
+		totals.CPUMillicores = totals.CPUMillicores - localParseCPU(m.OldValue) + localParseCPU(m.NewValue)
+	case "requests.memory":
+		totals.MemoryMiB = totals.MemoryMiB - localParseMemory(m.OldValue) + localParseMemory(m.NewValue)
+	}
+}
+
+// localParseCPU mirrors finops.parseCPU (unexported) for cmd package use.
+func localParseCPU(v string) int64 {
+	if v == "" || v == "not set" {
+		return 0
+	}
+	if strings.HasSuffix(v, "m") {
+		var n int64
+		fmt.Sscanf(strings.TrimSuffix(v, "m"), "%d", &n)
+		return n
+	}
+	var f float64
+	fmt.Sscanf(v, "%f", &f)
+	return int64(f * 1000)
+}
+
+// localParseMemory mirrors finops.parseMemory (unexported) for cmd package use.
+func localParseMemory(v string) int64 {
+	if v == "" || v == "not set" {
+		return 0
+	}
+	switch {
+	case strings.HasSuffix(v, "Gi"):
+		var f float64
+		fmt.Sscanf(strings.TrimSuffix(v, "Gi"), "%f", &f)
+		return int64(f * 1024)
+	case strings.HasSuffix(v, "Mi"):
+		var f float64
+		fmt.Sscanf(strings.TrimSuffix(v, "Mi"), "%f", &f)
+		return int64(f)
+	}
+	return 0
 }

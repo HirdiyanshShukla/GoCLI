@@ -29,15 +29,15 @@ var tunnelCmd = &cobra.Command{
 		namespace := appName + "-ns"
 
 
-		fmt.Printf("\033[1;36m🌍 Opening a direct tunnel to '%s'...\033[0m\n", appName)
-		fmt.Println("\033[1;32m👉 App will be live at: http://localhost:8081\033[0m")
+		fmt.Printf("\033[1;36mOpening a direct tunnel to '%s'...\033[0m\n", appName)
+		fmt.Println("\033[1;32mApp will be live at: http://localhost:8081\033[0m")
 		fmt.Println("\033[33mPress [Ctrl+C] to close the tunnel when you are done.\n\033[0m")
 
 		sigChan := make(chan os.Signal, 1)
 		signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 		go func() {
 			<-sigChan
-			fmt.Println("\n\033[1;36m🚪 Port-forwarding stopped.\033[0m")
+			fmt.Println("\n\033[1;36mPort-forwarding stopped.\033[0m")
 			os.Exit(0)
 		}()
 

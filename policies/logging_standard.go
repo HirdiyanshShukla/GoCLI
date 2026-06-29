@@ -71,7 +71,7 @@ func scanForPattern(projectPath, path, pattern string) []policy.Finding {
 		return nil
 	}
 	
-	// 💡 THE FIX: Use standard library OS-aware path resolution
+	// THE FIX: Use standard library OS-aware path resolution
 	rel, _ := filepath.Rel(projectPath, path)
 	
 	var findings []policy.Finding

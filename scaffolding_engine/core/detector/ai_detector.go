@@ -152,6 +152,6 @@ You MUST respond with ONLY valid JSON matching this exact structure:
 		result.AppPort = 8080 // safe fallback
 	}
 
-	fmt.Printf("\033[1;32m✓\033[0m AI identified framework: %s (port %d)\n", result.Framework, result.AppPort)
+	fmt.Printf("\033[1;32m\033[0m AI identified framework: %s (port %d)\n", result.Framework, result.AppPort)
 	return result, nil
 }

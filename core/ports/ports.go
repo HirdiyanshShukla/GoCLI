@@ -188,7 +188,7 @@ func resolveServicePort(saved, preferred int, containerName string, internalPort
 
 	for candidate := preferred + 1; candidate <= preferred+200; candidate++ {
 		if isPortFree(candidate) {
-			fmt.Printf("\033[1;32m✓\033[0m Using port %d instead of %d\n", candidate, preferred)
+			fmt.Printf("\033[1;32m\033[0m Using port %d instead of %d\n", candidate, preferred)
 			return candidate, nil
 		}
 	}

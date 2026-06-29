@@ -46,7 +46,7 @@ var logsAnalyzeCmd = &cobra.Command{
 					appName = strings.ReplaceAll(appName, "_", "-")
 					appName = strings.ReplaceAll(appName, " ", "-")
 
-					fmt.Printf("\033[1;36m🔎 Attempting to auto-fetch latest logs from local Jenkins for '%s'...\033[0m\n", appName)
+					fmt.Printf("\033[1;36mAttempting to auto-fetch latest logs from local Jenkins for '%s'...\033[0m\n", appName)
 					url := fmt.Sprintf("%s/job/%s/lastBuild/consoleText", loadSandboxPorts().JenkinsURL(), appName)
 					req, err := http.NewRequest("GET", url, nil)
 					if err == nil {
@@ -58,7 +58,7 @@ var logsAnalyzeCmd = &cobra.Command{
 							body, err := io.ReadAll(resp.Body)
 							if err == nil && len(body) > 0 {
 								logContent = body
-								fmt.Printf("\033[1;32m✓ Successfully fetched latest logs for job '%s'\033[0m\n", appName)
+								fmt.Printf("\033[1;32mSuccessfully fetched latest logs for job '%s'\033[0m\n", appName)
 							}
 						}
 					}
@@ -92,7 +92,7 @@ var logsAnalyzeCmd = &cobra.Command{
 		// Print highlighted summary of warnings/errors
 		printHighlightedLogSummary(string(logContent))
 
-		fmt.Println("\033[1;36m🤖 Analyzing logs...\033[0m")
+		fmt.Println("\033[1;36mAnalyzing logs...\033[0m")
 
 		result, err := ai.AnalyzeLogs(string(logContent))
 		if err != nil {
@@ -123,7 +123,7 @@ func printHighlightedLogSummary(logContent string) {
 		if isError || isWarning {
 			if !hasLogSummaries {
 				fmt.Println()
-				fmt.Println("\033[1;35m📋 Detected Log Warnings/Errors:\033[0m")
+				fmt.Println("\033[1;35mDetected Log Warnings/Errors:\033[0m")
 				hasLogSummaries = true
 			}
 			if printedCount >= 10 {

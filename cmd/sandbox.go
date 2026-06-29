@@ -6,6 +6,7 @@ import (
     "os"
     "os/exec"
     "path/filepath"
+    "runtime"
     "strings"
  
     "devsandbox/core"
@@ -35,7 +36,7 @@ var prepCiCmd = &cobra.Command{
             return
         }
 
-        fmt.Printf("\033[1;32m✓\033[0m Ports — registry: %s, jenkins: %d, tunnel: %d\n",
+        fmt.Printf("\033[1;32m\033[0m Ports — registry: %s, jenkins: %d, tunnel: %d\n",
             sandboxPorts.RegistryHost(), sandboxPorts.Jenkins, sandboxPorts.Tunnel)
 
         // 2. REGISTRY
@@ -58,7 +59,7 @@ var prepCiCmd = &cobra.Command{
             }
         }
  
-        fmt.Println("\n\033[1;36m🏗️ Building Kubernetes Sandbox & CI/CD Pipeline...\033[0m")
+        fmt.Println("\n\033[1;36m️ Building Kubernetes Sandbox & CI/CD Pipeline...\033[0m")
  
         // KIND CONFIG
         kindConfig := fmt.Sprintf(`
@@ -87,7 +88,7 @@ containerdConfigPatches:
             "--image", "kindest/node:v1.30.0",
         )
         } else {
-            fmt.Printf("\033[1;32m✓\033[0m Kind cluster '%s' already exists — reusing it\033[0m\n", clusterName)
+            fmt.Printf("\033[1;32m\033[0m Kind cluster '%s' already exists — reusing it\033[0m\n", clusterName)
         }
  
         core.ExecCommand(
@@ -97,7 +98,7 @@ containerdConfigPatches:
             "docker", "network", "connect", "kind", "local-registry",
         )
  
-        fmt.Println("\033[1;36m🔄 Generating isolated Kubeconfig for Jenkins...\033[0m")
+        fmt.Println("\033[1;36mGenerating isolated Kubeconfig for Jenkins...\033[0m")
         generateJenkinsKubeConfig(cwd)
  
         // JCasC
@@ -122,7 +123,7 @@ jenkins:
  
         if !isJenkinsRunning() {
 
-            fmt.Println("\033[1;36m🚀 Launching Jenkins Server (Automated Setup)...\033[0m")
+            fmt.Println("\033[1;36mLaunching Jenkins Server (Automated Setup)...\033[0m")
 
             removeStoppedContainer(jenkinsName)
 
@@ -140,13 +141,13 @@ jenkins:
 		}
 
 		fmt.Println("\n\033[1;32m✅ CI/CD Sandbox Infrastructure is LIVE!\033[0m")
-		fmt.Printf("\033[33m👉 Jenkins UI: %s\033[0m\n", sandboxPorts.JenkinsURL())
-		fmt.Printf("\033[33m👉 Docker Push API: %s\033[0m\n", sandboxPorts.RegistryHost())
-		fmt.Println("\033[33m👉 Credentials: admin / admin\033[0m")
+		fmt.Printf("\033[33mJenkins UI: %s\033[0m\n", sandboxPorts.JenkinsURL())
+		fmt.Printf("\033[33mDocker Push API: %s\033[0m\n", sandboxPorts.RegistryHost())
+		fmt.Println("\033[33mCredentials: admin / admin\033[0m")
 
 		// --- NEW HANDOFF MESSAGE ---
 		cliName := filepath.Base(os.Args[0])
-		fmt.Printf("\n\033[1;36m🚀 Ready to deploy? Run '%s run' to start your first build and track it live!\033[0m\n\n", cliName)
+		fmt.Printf("\n\033[1;36mReady to deploy? Run '%s run' to start your first build and track it live!\033[0m\n\n", cliName)
 	},
 }
 var destroyCiCmd = &cobra.Command{
@@ -156,7 +157,7 @@ var destroyCiCmd = &cobra.Command{
 
 		clusterName := "ephemeral-test"
 
-		fmt.Println("\033[1;31m💥 Commencing total teardown...\033[0m")
+		fmt.Println("\033[1;31mCommencing total teardown...\033[0m")
 
 		core.ExecCommand(
 			"Nuking containers",
@@ -185,16 +186,14 @@ var destroyCiCmd = &cobra.Command{
 			"--name", clusterName,
 		)
 
-		// Clean up the temporary local kubeconfig
 		cwd, _ := os.Getwd()
-		os.Remove(filepath.Join(cwd, ".kubeconfig-jenkins"))
 		ports.Clear(cwd)
 
-		fmt.Println("\n\033[1;32m🧹 Infrastructure destroyed safely.\033[0m")
+		fmt.Println("\n\033[1;32mInfrastructure destroyed safely.\033[0m")
 
-		// --- NEW LOGIC: Interactive Scaffolding Cleanup ---
-		fmt.Println("\n\033[1;33m⚠️  Do you also want to delete the generated scaffolding files from this project?\033[0m")
-		fmt.Println("  (This will remove Dockerfile, Jenkinsfile, pipeline.yaml, and the entire k8s/ directory)")
+		// Interactive scaffolding cleanup - ask before removing project files.
+		fmt.Println("\n\033[1;33mDo you also want to delete the generated scaffolding files?\033[0m")
+		fmt.Println("  (Dockerfile, Jenkinsfile, pipeline.yaml, k8s directory, cache and port files)")
 		fmt.Print("Proceed? (y/N): ")
 
 		reader := bufio.NewReader(os.Stdin)
@@ -202,46 +201,33 @@ var destroyCiCmd = &cobra.Command{
 		response = strings.TrimSpace(strings.ToLower(response))
 
 		if response == "y" || response == "yes" {
-			cwd, err := os.Getwd()
-			if err != nil {
-				fmt.Printf("\033[1;31m❌ Could not get current directory: %v\033[0m\n", err)
-				return
-			}
-
+			// All possible artifacts created by opsai init / prep-ci.
 			filesToRemove := []string{
 				"Dockerfile",
 				"Jenkinsfile",
 				"pipeline.yaml",
 				"k8s",
+				".devsandbox-finops-cache.json",
+				".opsai-ports.json",
+				".pipeline",
 			}
 
-			fmt.Println("\n\033[1;36m🧹 Cleaning up CI/CD files...\033[0m")
-			deletedCount := 0
+			fmt.Println("\n\033[1;36mCleaning up CI/CD files...\033[0m")
 
 			for _, file := range filesToRemove {
-				targetPath := filepath.Join(cwd, file)
-
-				if _, err := os.Stat(targetPath); os.IsNotExist(err) {
-					continue
-				}
-
-				err = os.RemoveAll(targetPath)
-				if err != nil {
-					fmt.Printf("\033[1;31m❌ Failed to delete %s: %v\033[0m\n", file, err)
-				} else {
-					fmt.Printf("\033[1;32m✓\033[0m Deleted %s\n", file)
-					deletedCount++
+				path := filepath.Join(cwd, file)
+				// os.RemoveAll is safe: if the path does not exist it returns nil.
+				if err := os.RemoveAll(path); err != nil {
+					fmt.Printf("\033[1;33mCould not remove %s: %v\033[0m\n", file, err)
 				}
 			}
-
-			if deletedCount == 0 {
-				fmt.Println("No scaffolding files found to delete.")
-			} else {
-				fmt.Println("\n\033[1;32m✨ Clean slate! All files and infrastructure destroyed.\033[0m\n")
-			}
+			fmt.Println("\033[1;32mProject artifacts cleaned up.\033[0m")
 		} else {
-			fmt.Println("\n\033[1;32m✨ Teardown complete! (Kept local scaffolding files)\033[0m\n")
+			fmt.Println("\n\033[1;32mTeardown complete! (Kept local scaffolding files)\033[0m")
 		}
+
+		// Unconditional: always remove the runtime kubeconfig.
+		os.RemoveAll(filepath.Join(cwd, ".kubeconfig-jenkins"))
 	},
 }
  
@@ -341,6 +327,14 @@ func bootRegistryContainer(preferredPort int) int {
 func bootJenkinsContainer(cwd, homeDir string, sandboxPorts ports.SandboxPorts) (int, bool) {
 	port := sandboxPorts.Jenkins
 
+	// Mirror the project path on both sides of the mount (required for
+	// Docker-out-of-Docker correctness). On Windows, convert once before
+	// mirroring so the result is a valid path on both sides of the colon.
+	mountPath := cwd
+	if runtime.GOOS == "windows" {
+		mountPath = core.ToDockerPath(cwd)
+	}
+
 	for attempt := 0; attempt < 5; attempt++ {
 		if attempt > 0 {
 			next, err := ports.AllocatePort(port + 1)
@@ -362,13 +356,13 @@ func bootJenkinsContainer(cwd, homeDir string, sandboxPorts ports.SandboxPorts) 
 			"--name", jenkinsName,
 			"-u", "root",
 			"-e", fmt.Sprintf("HOST_HOME=%s", homeDir),
-			"-e", fmt.Sprintf("HOST_PROJECT_PATH=%s", cwd),
+			"-e", fmt.Sprintf("HOST_PROJECT_PATH=%s", mountPath),
 			"-e", `JAVA_OPTS=-Djenkins.install.runSetupWizard=false`,
 			"-e", "CASC_JENKINS_CONFIG=/var/jenkins_home/casc.yaml",
 			"-v", "local-jenkins-data:/var/jenkins_home",
 			"-v", "/var/run/docker.sock:/var/run/docker.sock",
 			"--add-host=host.docker.internal:host-gateway", // Crucial network bridge for Linux/WSL
-			"-v", fmt.Sprintf("%s:%s", cwd, cwd),
+			"-v", fmt.Sprintf("%s:%s", mountPath, mountPath),
 			"jenkins/jenkins:lts",
 		)
 		out, err := cmd.CombinedOutput()
@@ -465,7 +459,7 @@ func bootAndProvisionJenkins(cwd string, sandboxPorts ports.SandboxPorts, cascFi
 		"docker", "restart", jenkinsName,
 	)
 
-	fmt.Println("\033[33m⏳ Waiting for Jenkins to fully boot...\033[0m")
+	fmt.Println("\033[33mWaiting for Jenkins to fully boot...\033[0m")
 
 	core.ExecCommand(
 		"Checking Jenkins API readiness",

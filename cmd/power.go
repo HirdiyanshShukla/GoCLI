@@ -18,7 +18,7 @@ var pauseCmd = &cobra.Command{
 	Short: "Suspends the CI/CD sandbox to save RAM and battery — data is preserved",
 	Run: func(cmd *cobra.Command, args []string) {
 		cliName := filepath.Base(os.Args[0])
-		fmt.Println("\033[1;33m⏸️  Pausing infrastructure...\033[0m")
+		fmt.Println("\033[1;33m️  Pausing infrastructure...\033[0m")
 
 		// Stop in reverse dependency order: Jenkins first, then cluster, then registry
 		core.ExecCommand("Stopping Jenkins", true, true,
@@ -29,7 +29,7 @@ var pauseCmd = &cobra.Command{
 			"docker", "stop", "local-registry")
 
 		fmt.Println("\n\033[1;32m✅ Sandbox paused. All data preserved.\033[0m")
-		fmt.Printf("\033[33m👉 Resume with: %s resume\033[0m\n", cliName)
+		fmt.Printf("\033[33mResume with: %s resume\033[0m\n", cliName)
 	},
 }
 
@@ -47,7 +47,7 @@ var resumeCmd = &cobra.Command{
 
 		// Wait for the Kind node to be Ready before starting Jenkins
 		// Jenkins connects to the cluster on startup — if cluster isn't ready it fails silently
-		fmt.Println("\033[33m⏳ Waiting for Kubernetes node to become ready...\033[0m")
+		fmt.Println("\033[33mWaiting for Kubernetes node to become ready...\033[0m")
 		waitForKindNode()
 
 		core.ExecCommand("Starting Jenkins", false, true,
@@ -55,8 +55,8 @@ var resumeCmd = &cobra.Command{
 
 		sandboxPorts := loadSandboxPorts()
 		fmt.Println("\n\033[1;32m✅ Sandbox is back online.\033[0m")
-		fmt.Printf("\033[33m👉 Jenkins UI: %s\033[0m\n", sandboxPorts.JenkinsURL())
-		fmt.Println("\033[33m👉 Credentials: admin / admin\033[0m")
+		fmt.Printf("\033[33mJenkins UI: %s\033[0m\n", sandboxPorts.JenkinsURL())
+		fmt.Println("\033[33mCredentials: admin / admin\033[0m")
 	},
 }
 
@@ -70,7 +70,7 @@ func waitForKindNode() {
 			"--no-headers",
 		).Output()
 		if err == nil && strings.Contains(string(out), "Ready") {
-			fmt.Println("\033[1;32m✓\033[0m Kubernetes node is Ready")
+			fmt.Println("\033[1;32m\033[0m Kubernetes node is Ready")
 			return
 		}
 		time.Sleep(2 * time.Second)

@@ -142,7 +142,7 @@ var policyEnableCmd = &cobra.Command{
 			fmt.Printf("\033[1;31m❌ Failed to write pipeline.yaml: %v\033[0m\n", err)
 			os.Exit(1)
 		}
-		fmt.Printf("\033[1;32m✓\033[0m Policy '%s' is now enabled.\n", name)
+		fmt.Printf("\033[1;32m\033[0m Policy '%s' is now enabled.\n", name)
 	},
 }
 
@@ -184,7 +184,7 @@ var policyDisableCmd = &cobra.Command{
 			fmt.Printf("\033[1;31m❌ Failed to write pipeline.yaml: %v\033[0m\n", err)
 			os.Exit(1)
 		}
-		fmt.Printf("\033[1;32m✓\033[0m Policy '%s' is now disabled.\n", name)
+		fmt.Printf("\033[1;32m\033[0m Policy '%s' is now disabled.\n", name)
 	},
 }
 

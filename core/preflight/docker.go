@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -15,7 +16,7 @@ const dockerVersionTimeout = 30 * time.Second
 
 func EnsureDockerRunning() error {
 
-	fmt.Println("🔍 Validating Docker daemon...")
+	fmt.Println("Validating Docker daemon...")
 
 	// ------------------------------------------------------------
 	// 1. Check if Docker is installed
@@ -102,7 +103,7 @@ func EnsureDockerRunning() error {
 	if err == nil {
 
 		fmt.Println("✅ Docker daemon healthy")
-		fmt.Println("🐳 Docker Engine v" + version)
+		fmt.Println("Docker Engine v" + version)
 
 		return nil
 	}
@@ -117,7 +118,7 @@ func EnsureDockerRunning() error {
 
 	case "darwin":
 
-		fmt.Println("🚀 Launching Docker Desktop...")
+		fmt.Println("Launching Docker Desktop...")
 
 		if err := exec.Command(
 			"open",
@@ -133,25 +134,18 @@ func EnsureDockerRunning() error {
 
 	case "windows":
 
-		fmt.Println("🚀 Launching Docker Desktop...")
+		fmt.Println("Launching Docker Desktop...")
 
-		if err := exec.Command(
-			"powershell",
-			"-Command",
-			"Start-Process Docker Desktop",
-		).Start(); err != nil {
+		if err := launchDockerDesktopWindows(); err != nil {
 
-			return fmt.Errorf(
-				"failed to launch Docker Desktop: %w",
-				err,
-			)
+			return err
 		}
 
 	case "linux":
 
 		if isWSL() {
 
-			fmt.Println("🪟 Detected WSL environment")
+			fmt.Println("Detected WSL environment")
 
 			exec.Command(
 				"cmd.exe",
@@ -176,7 +170,11 @@ func EnsureDockerRunning() error {
 	// 4. Wait for Docker daemon readiness
 	// ------------------------------------------------------------
 
-	timeout := time.After(180 * time.Second)
+	timeoutDur := 180 * time.Second
+	if runtime.GOOS == "windows" {
+		timeoutDur = 300 * time.Second
+	}
+	timeout := time.After(timeoutDur)
 
 	ticker := time.NewTicker(2 * time.Second)
 
@@ -199,12 +197,12 @@ func EnsureDockerRunning() error {
 			if err == nil {
 
 				fmt.Println("✅ Docker daemon recovered")
-				fmt.Println("🐳 Docker Engine v" + version)
+				fmt.Println("Docker Engine v" + version)
 
 				return nil
 			}
 
-			fmt.Println("⏳ Waiting for Docker daemon...")
+			fmt.Println("Waiting for Docker daemon...")
 		}
 	}
 }
@@ -259,4 +257,30 @@ func isWSL() bool {
 		strings.ToLower(string(data)),
 		"microsoft",
 	)
+}
+
+// ------------------------------------------------------------
+// Windows specific launch helper
+// ------------------------------------------------------------
+
+func launchDockerDesktopWindows() error {
+	candidates := []string{
+		`C:\Program Files\Docker\Docker\Docker Desktop.exe`,
+		`C:\Program Files (x86)\Docker\Docker\Docker Desktop.exe`,
+	}
+	if localAppData := os.Getenv("LOCALAPPDATA"); localAppData != "" {
+		candidates = append(candidates, filepath.Join(localAppData, "Docker", "Docker Desktop.exe"))
+	}
+	for _, path := range candidates {
+		if _, err := os.Stat(path); err == nil {
+			cmd := exec.Command("powershell", "-Command",
+				fmt.Sprintf("Start-Process -FilePath '%s'", path))
+			if err := cmd.Start(); err == nil {
+				return nil
+			}
+		}
+	}
+	return fmt.Errorf(
+		"could not locate Docker Desktop automatically.\n" +
+			"   Please start Docker Desktop manually, then re-run this command")
 }

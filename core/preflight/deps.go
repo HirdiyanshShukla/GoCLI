@@ -2,8 +2,11 @@ package preflight
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
+	"strings"
 )
 
 // CheckDependencies ensures required binaries are in the system PATH, and tries to install them if not.
@@ -31,12 +34,25 @@ func installDependency(dep string) error {
 	case "darwin":
 		return exec.Command("brew", "install", dep).Run()
 	case "windows":
+		var winget *exec.Cmd
 		if dep == "kind" {
-			return exec.Command("winget", "install", "Kubernetes.kind").Run()
+			winget = exec.Command("winget", "install", "Kubernetes.kind", "--accept-source-agreements", "--accept-package-agreements")
+		} else if dep == "kubectl" {
+			winget = exec.Command("winget", "install", "Kubernetes.kubectl", "--accept-source-agreements", "--accept-package-agreements")
+		} else {
+			return fmt.Errorf("unsupported Windows dependency: %s", dep)
 		}
-		if dep == "kubectl" {
-			return exec.Command("winget", "install", "Kubernetes.kubectl").Run()
+
+		if err := winget.Run(); err != nil {
+			return fmt.Errorf("winget install failed: %w", err)
 		}
+		refreshWindowsPath()
+		if _, err := exec.LookPath(dep); err != nil {
+			return fmt.Errorf(
+				"%s was installed, but this terminal session can't see it yet.\n"+
+					"   Close and reopen your terminal, then re-run this command", dep)
+		}
+		return nil
 	case "linux":
 		if dep == "kind" {
 			return exec.Command("bash", "-c", "curl -Lo ./kind https://kind.sigs.k8s.io/dl/latest/kind-linux-amd64 && chmod +x ./kind && sudo mv ./kind /usr/local/bin/kind").Run()
@@ -47,4 +63,24 @@ func installDependency(dep string) error {
 	}
 
 	return fmt.Errorf("unsupported OS for auto-install")
+}
+
+// refreshWindowsPath adds known winget shim directories to THIS process's
+// PATH. Winget's own PATH update only reaches new processes — without this,
+// a tool installed moments ago is invisible to the rest of this run.
+func refreshWindowsPath() {
+	if runtime.GOOS != "windows" {
+		return
+	}
+	candidates := []string{
+		filepath.Join(os.Getenv("LOCALAPPDATA"), "Microsoft", "WindowsApps"),
+		filepath.Join(os.Getenv("LOCALAPPDATA"), "Microsoft", "WinGet", "Links"),
+	}
+	current := os.Getenv("PATH")
+	for _, dir := range candidates {
+		if !strings.Contains(current, dir) {
+			current = dir + string(os.PathListSeparator) + current
+		}
+	}
+	os.Setenv("PATH", current)
 }

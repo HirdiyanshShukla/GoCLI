@@ -28,3 +28,6 @@ Thumbs.db
 # Build output
 /bin/
 /dist/
+
+# DevSandbox generated runtime files
+.devsandbox-finops-cache.json

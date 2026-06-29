@@ -29,7 +29,7 @@ func (p *MandatoryProbes) Run(projectPath string, _ map[string]map[string]interf
 	var findings []policy.Finding
 
 	walkK8sFiles(projectPath, func(path string) {
-		// 💡 THE FIX: Skip overlay patches — they are intentionally partial manifests.
+		// THE FIX: Skip overlay patches — they are intentionally partial manifests.
 		// Full security context and probes live in k8s/base/ only.
 		normalizedPath := filepath.ToSlash(path)
 		if strings.Contains(normalizedPath, "/k8s/overlays/") || strings.HasPrefix(normalizedPath, "k8s/overlays/") {

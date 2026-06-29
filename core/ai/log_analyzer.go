@@ -19,16 +19,16 @@ type AnalysisResult struct {
 func PrintAnalysis(result AnalysisResult) {
 	fmt.Println()
 	fmt.Println("\033[1;36m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m")
-	fmt.Println("\033[1;36m  🤖 AI Log Analysis\033[0m")
+	fmt.Println("\033[1;36m  AI Log Analysis\033[0m")
 	fmt.Println("\033[1;36m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m")
 
 	fmt.Println()
-	fmt.Println("\033[1;31m🔍 Root Cause:\033[0m")
+	fmt.Println("\033[1;31mRoot Cause:\033[0m")
 	fmt.Printf("   %s\n", result.RootCause)
 
 	if len(result.Suggestions) > 0 {
 		fmt.Println()
-		fmt.Println("\033[1;33m💡 Suggestions:\033[0m")
+		fmt.Println("\033[1;33mSuggestions:\033[0m")
 		for i, s := range result.Suggestions {
 			fmt.Printf("   %d. %s\n", i+1, s)
 		}
@@ -36,7 +36,7 @@ func PrintAnalysis(result AnalysisResult) {
 
 	if len(result.FixCommands) > 0 {
 		fmt.Println()
-		fmt.Println("\033[1;32m🔧 Fix Commands:\033[0m")
+		fmt.Println("\033[1;32mFix Commands:\033[0m")
 		for _, cmd := range result.FixCommands {
 			fmt.Printf("   \033[0;32m$ %s\033[0m\n", cmd)
 		}

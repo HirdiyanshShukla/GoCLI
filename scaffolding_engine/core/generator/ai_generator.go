@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"devsandbox/core"
 	"devsandbox/core/ai"
 	"devsandbox/scaffolding_engine/core/detector"
 	"devsandbox/scaffolding_engine/core/rules"
@@ -190,7 +191,7 @@ func buildShallowTree(sb *strings.Builder, root, current string, depth, maxDepth
 		}
 		indent := strings.Repeat("  ", depth)
 		if e.IsDir() {
-			sb.WriteString(fmt.Sprintf("%s📁 %s/\n", indent, e.Name()))
+			sb.WriteString(fmt.Sprintf("%s%s/\n", indent, e.Name()))
 			buildShallowTree(sb, root, filepath.Join(current, e.Name()), depth+1, maxDepth)
 		} else {
 			sb.WriteString(fmt.Sprintf("%s   %s\n", indent, e.Name()))
@@ -402,7 +403,7 @@ func lintGeneratedDockerfile(content string) (violations []string, skipped bool)
 
 	out, _ := exec.Command(
 		"docker", "run", "--rm",
-		"-v", fmt.Sprintf("%s:/tmp/Dockerfile:ro", tmp.Name()),
+		"-v", fmt.Sprintf("%s:/tmp/Dockerfile:ro", core.ToDockerPath(tmp.Name())),
 		"hadolint/hadolint",
 		"hadolint",
 		"--format", "json",
@@ -444,10 +445,10 @@ func AIGenerateDockerfileWithValidation(
 
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		if attempt == 1 {
-			fmt.Println("\033[1;36m🤖 Generating Dockerfile from project context...\033[0m")
+			fmt.Println("\033[1;36mGenerating Dockerfile from project context...\033[0m")
 		} else {
 			fmt.Printf(
-				"\033[1;33m🔄 Attempt %d/%d — sending %d structural fix(es) back to AI...\033[0m\n",
+				"\033[1;33mAttempt %d/%d — sending %d structural fix(es) back to AI...\033[0m\n",
 				attempt, maxAttempts, len(priorErrors),
 			)
 		}
@@ -484,7 +485,7 @@ func AIGenerateDockerfileWithValidation(
 		// ── Level B: hadolint (warnings only, never retried) ──────────────────
 		lintViolations, lintSkipped := lintGeneratedDockerfile(result.DockerfileContent)
 		if !lintSkipped && len(lintViolations) > 0 {
-			fmt.Println("\033[33m  📋 Hadolint suggestions (run 'devsandbox validate' to fix later):\033[0m")
+			fmt.Println("\033[33m  Hadolint suggestions (run 'validate command' to fix later):\033[0m")
 			for _, v := range lintViolations {
 				fmt.Printf("\033[33m     %s\033[0m\n", v)
 			}
@@ -492,7 +493,7 @@ func AIGenerateDockerfileWithValidation(
 
 		if len(structErrors) == 0 {
 			fmt.Printf(
-				"\033[1;32m✓\033[0m Dockerfile validated successfully (attempt %d/%d)\n",
+				"\033[1;32m\033[0m Dockerfile validated successfully (attempt %d/%d)\n",
 				attempt, maxAttempts,
 			)
 			return result, nil

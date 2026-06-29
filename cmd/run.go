@@ -38,7 +38,7 @@ var runCmd = &cobra.Command{
 		appName = strings.ReplaceAll(appName, "_", "-")
 		appName = strings.ReplaceAll(appName, " ", "-")
 
-		fmt.Println("\033[1;36m🚀 Syncing pipeline and triggering build...\033[0m")
+		fmt.Println("\033[1;36mSyncing pipeline and triggering build...\033[0m")
 
 		jenkinsfileBytes, err := os.ReadFile(filepath.Join(cwd, "Jenkinsfile"))
 		if err != nil {
@@ -123,7 +123,7 @@ done
 
 		sandboxPorts := loadSandboxPorts()
 		fmt.Printf("\n\033[1;32m✅ Build triggered!\033[0m\n")
-		fmt.Printf("\033[33m👉 Track it live at: %s/job/%s\033[0m\n", sandboxPorts.JenkinsURL(), appName)
+		fmt.Printf("\033[33mTrack it live at: %s/job/%s\033[0m\n", sandboxPorts.JenkinsURL(), appName)
 
 		// Wait for Jenkins to finish BEFORE checking Kubernetes
 		waitForJenkinsBuild(appName, sandboxPorts)
@@ -135,7 +135,7 @@ func init() {
 }
 
 func waitForJenkinsBuild(appName string, sandboxPorts ports.SandboxPorts) {
-	fmt.Printf("\n\033[1;36m⏳ Waiting for Jenkins CI pipeline to start...\033[0m\n")
+	fmt.Printf("\n\033[1;36mWaiting for Jenkins CI pipeline to start...\033[0m\n")
 
 	client := &http.Client{Timeout: 5 * time.Second}
 	url := fmt.Sprintf("%s/job/%s/lastBuild/api/json", sandboxPorts.JenkinsURL(), appName)
@@ -190,7 +190,7 @@ func waitForJenkinsBuild(appName string, sandboxPorts ports.SandboxPorts) {
 					defer logResp.Body.Close()
 					logBody, err := io.ReadAll(logResp.Body)
 					if err == nil && len(logBody) > 0 {
-						fmt.Println("\n\033[1;35m🤖 Pipeline failed. Auto-analyzing console logs with Gemini AI...\033[0m")
+						fmt.Println("\n\033[1;35mPipeline failed. Auto-analyzing console logs with Gemini AI...\033[0m")
 						analysis, err := ai.AnalyzeLogs(string(logBody))
 						if err != nil {
 							fmt.Printf("\033[1;31m❌ Log analysis failed: %v\033[0m\n", err)
@@ -253,20 +253,20 @@ func monitorKubernetesDeployment(appName string) {
 		finished      bool
 	)
 
-	fmt.Printf("\n\033[1;36m⏳ Monitoring deployment of '%s' in namespace '%s'...\033[0m\n", appName, namespace)
+	fmt.Printf("\n\033[1;36mMonitoring deployment of '%s' in namespace '%s'...\033[0m\n", appName, namespace)
 
 	for attempt := 0; attempt < maxAttempts && !finished; attempt++ {
 		time.Sleep(5 * time.Second)
 
 		out, err := exec.Command("kubectl", "get", "pods", "-n", namespace, "-o", "json").Output()
 		if err != nil {
-			fmt.Printf("\033[33m⏳ Waiting for pods to appear... (%ds)\033[0m\033[K\r", (attempt+1)*5)
+			fmt.Printf("\033[33mWaiting for pods to appear... (%ds)\033[0m\033[K\r", (attempt+1)*5)
 			continue
 		}
 
 		var podList PodList
 		if jsonErr := json.Unmarshal(out, &podList); jsonErr != nil || len(podList.Items) == 0 {
-			fmt.Printf("\033[33m⏳ No pods found yet... (%ds)\033[0m\033[K\r", (attempt+1)*5)
+			fmt.Printf("\033[33mNo pods found yet... (%ds)\033[0m\033[K\r", (attempt+1)*5)
 			continue
 		}
 
@@ -331,18 +331,18 @@ func monitorKubernetesDeployment(appName string) {
 
 		if failedPodName != "" {
 			finished = true
-			fmt.Println("\n")
+			fmt.Println()
 			fmt.Printf("\033[1;31m❌ Kubernetes deployment failed! Pod '%s' entered failure state: %s\033[0m\n", failedPodName, failureReason)
 			if failureDetail != "" {
 				fmt.Printf("Details: %s\n", failureDetail)
 			}
 
-			fmt.Println("🔎 Fetching failing pod logs and invoking AI Log Analyzer...")
+			fmt.Println("Fetching failing pod logs and invoking AI Log Analyzer...")
 			logCmd := exec.Command("kubectl", "logs", failedPodName, "-n", namespace, "--tail=100")
 			logOutput, logErr := logCmd.CombinedOutput()
 
 			if logErr == nil && len(logOutput) > 0 {
-				fmt.Println("\033[1;36m🤖 Analyzing pod logs...\033[0m")
+				fmt.Println("\033[1;36mAnalyzing pod logs...\033[0m")
 				analysis, err := ai.AnalyzeLogs(string(logOutput))
 				if err != nil {
 					fmt.Printf("\033[1;31m❌ Pod log analysis failed: %v\033[0m\n", err)
@@ -353,23 +353,23 @@ func monitorKubernetesDeployment(appName string) {
 			} else {
 				fmt.Println("⚠️  Could not retrieve pod logs (container may not have started yet).")
 				cliName := filepath.Base(os.Args[0])
-				fmt.Printf("\033[33m👉 Run '%s logs analyze' to diagnose further.\033[0m\n", cliName)
+				fmt.Printf("\033[33mRun '%s logs analyze' to diagnose further.\033[0m\n", cliName)
 			}
 			return
 		}
 
 		if allRunningAndReady && activePodsFound {
 			finished = true
-			fmt.Println("\n")
+			fmt.Println()
 			fmt.Println("\033[1;32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m")
 			fmt.Println("\033[1;32m  ✅ Project Deployed Successfully!\033[0m")
 			fmt.Printf("\033[1;32m  App: %s is live and healthy\033[0m\n", appName)
 			fmt.Println("\033[1;32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m")
 
 			cliName := filepath.Base(os.Args[0])
-			fmt.Printf("\033[33m👉 Run '%s tunnel' to access it at http://localhost:8081\033[0m\n\n", cliName)
+			fmt.Printf("\033[33mRun '%s tunnel' to access it at http://localhost:8081\033[0m\n\n", cliName)
 		} else {
-			// 🔥 THE FIX: Surface the exact waiting reason
+			// THE FIX: Surface the exact waiting reason
 			statusDetail := podPhase
 			if statusDetail == "" {
 				statusDetail = "Pods initializing"
@@ -388,7 +388,7 @@ func monitorKubernetesDeployment(appName string) {
 					}
 				}
 			}
-			fmt.Printf("\033[33m⏳ %s... (%ds elapsed)\033[0m\033[K\r", statusDetail, (attempt+1)*5)
+			fmt.Printf("\033[33m%s... (%ds elapsed)\033[0m\033[K\r", statusDetail, (attempt+1)*5)
 		}
 	}
 
@@ -401,12 +401,12 @@ func monitorKubernetesDeployment(appName string) {
 		podName := string(podNameBytes)
 
 		if podName != "" {
-			fmt.Printf("🔎 Fetching logs from stuck pod '%s' and invoking AI Log Analyzer...\n", podName)
+			fmt.Printf("Fetching logs from stuck pod '%s' and invoking AI Log Analyzer...\n", podName)
 			logCmd2 := exec.Command("kubectl", "logs", podName, "-n", namespace, "--tail=100")
 			logOutput2, _ := logCmd2.CombinedOutput()
 
 			if len(logOutput2) > 0 {
-				fmt.Println("\033[1;36m🤖 Analyzing pod logs...\033[0m")
+				fmt.Println("\033[1;36mAnalyzing pod logs...\033[0m")
 				analysis, err := ai.AnalyzeLogs(string(logOutput2))
 				if err == nil {
 					ai.PrintAnalysis(analysis)
@@ -415,7 +415,7 @@ func monitorKubernetesDeployment(appName string) {
 			}
 		} else {
 			cliName2 := filepath.Base(os.Args[0])
-			fmt.Printf("\033[33m👉 Run '%s logs analyze' to diagnose the issue.\033[0m\n", cliName2)
+			fmt.Printf("\033[33mRun '%s logs analyze' to diagnose the issue.\033[0m\n", cliName2)
 		}
 	}
 }

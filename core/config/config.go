@@ -14,6 +14,7 @@ type AppConfig struct {
 	JavaVersion   string      `yaml:"java_version"`
 	HealthPath    string      `yaml:"health_path"`
 	TestCommand   string      `yaml:"test_command"`
+	FinOpsRegion  string      `yaml:"finops_region"`
 	Env           []EnvVar    `yaml:"env"`
 	Secrets       []SecretRef `yaml:"secrets"`
 }

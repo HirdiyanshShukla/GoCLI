@@ -11,28 +11,28 @@ import (
 
 // RunSetupChecks executes all pre-flight validations
 func RunSetupChecks() {
-	fmt.Println("\n\033[1;36m✈️  Running Preflight Checks...\033[0m")
+	fmt.Println("\n\033[1;36m️  Running Preflight Checks...\033[0m")
 
 	// 0. Internet Check
 	if err := CheckInternet(); err != nil {
 		fmt.Printf("\033[1;31m❌ %s\033[0m\n", err.Error())
 		os.Exit(1)
 	}
-	fmt.Println("\033[1;32m✓\033[0m Internet connection verified")
+	fmt.Println("\033[1;32m\033[0m Internet connection verified")
 
 	// 1. Check System Dependencies
 	if err := CheckDependencies(); err != nil {
 		fmt.Printf("\033[1;31m❌ %s\033[0m\n", err.Error())
 		os.Exit(1)
 	}
-	fmt.Println("\033[1;32m✓\033[0m Core dependencies found (docker, kind, kubectl)")
+	fmt.Println("\033[1;32m\033[0m Core dependencies found (docker, kind, kubectl)")
 
 	// 2. Ensure Docker is awake
 	if err := EnsureDockerRunning(); err != nil {
 		fmt.Printf("\033[1;31m❌ %s\033[0m\n", err.Error())
 		os.Exit(1)
 	}
-	fmt.Println("\033[1;32m✓\033[0m Docker daemon is active")
+	fmt.Println("\033[1;32m\033[0m Docker daemon is active")
 
 	// 3. Check default ports — warn if busy; prep-ci will allocate alternates automatically
 	busy := []int{}
@@ -44,7 +44,7 @@ func RunSetupChecks() {
 	if len(busy) > 0 {
 		fmt.Printf("\033[33m⚠️  Default ports %v are in use — alternate ports will be allocated automatically\033[0m\n", busy)
 	} else {
-		fmt.Println("\033[1;32m✓\033[0m Default network ports (5001, 8080) are available")
+		fmt.Println("\033[1;32m\033[0m Default network ports (5001, 8080) are available")
 	}
 }
 
@@ -77,17 +77,17 @@ func getKillCommandSuggestion(port int) string {
 	switch runtime.GOOS {
 	case "windows":
 		return fmt.Sprintf(
-			"\033[33m   👉 To free this port on Windows, run:\n      netstat -ano | findstr :%d\n      taskkill /PID <ProcessId> /F\033[0m",
+			"\033[33m   To free this port on Windows, run:\n      netstat -ano | findstr :%d\n      taskkill /PID <ProcessId> /F\033[0m",
 			port,
 		)
 	case "darwin", "linux":
 		return fmt.Sprintf(
-			"\033[33m   👉 To free this port on Mac/Linux/WSL, run:\n      sudo lsof -i :%d\n      sudo kill -9 <PID>\033[0m",
+			"\033[33m   To free this port on Mac/Linux/WSL, run:\n      sudo lsof -i :%d\n      sudo kill -9 <PID>\033[0m",
 			port,
 		)
 	default:
 		return fmt.Sprintf(
-			"\033[33m   👉 Please free port %d before continuing.\033[0m",
+			"\033[33m   Please free port %d before continuing.\033[0m",
 			port,
 		)
 	}
