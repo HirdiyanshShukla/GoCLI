@@ -202,7 +202,7 @@ func GenerateFiles(framework string, projectPath string, entryPath string, aiRes
 
 				if _, err := os.Stat(destPath); err == nil {
 					if !(aiResult != nil && outputRelPath == "Dockerfile") {
-						fmt.Printf("⚠️  Skipping existing file (already customized): %s\n", outputRelPath)
+						fmt.Printf("Generated %s\n", destPath)
 					}
 					return nil
 				}

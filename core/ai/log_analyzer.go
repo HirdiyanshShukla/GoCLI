@@ -1,9 +1,11 @@
 package ai
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 )
@@ -91,8 +93,94 @@ func gatherWorkspaceContext() string {
 	return builder.String()
 }
 
-// AnalyzeLogs sends Jenkins or Kubernetes log output to Gemini and returns
-// a structured diagnosis with actionable fix suggestions.
+// FileReference represents a matched error location in a log
+type FileReference struct {
+	Path string
+	Line int
+}
+
+// ExtractErrorLocations parses logs for exact file and line number references
+func ExtractErrorLocations(logContent string) []FileReference {
+	var refs []FileReference
+	seen := make(map[string]bool)
+
+	// Regex patterns for different ecosystems
+	patterns := []*regexp.Regexp{
+		regexp.MustCompile(`File "([^"]+)", line (\d+)`),                 // Python traceback
+		regexp.MustCompile(`at .* \(([^:]+):(\d+):\d+\)`),                 // Node.js stack trace
+		regexp.MustCompile(`([^:\s]+):(\d+):\s`),                          // Go panic / compiler error
+		regexp.MustCompile(`at .*\(([^:]+\.java):(\d+)\)`),                // Java stack trace
+		regexp.MustCompile(`(?:^|\s)([\w\.-/]+\.(?:py|js|ts|go|java|yaml|yml|tmpl|sh|xml)):(\d+)`), // Generic fallback
+	}
+
+	lines := strings.Split(logContent, "\n")
+	for _, line := range lines {
+		for _, p := range patterns {
+			matches := p.FindStringSubmatch(line)
+			if len(matches) >= 3 {
+				path := matches[1]
+				var lineNum int
+				fmt.Sscanf(matches[2], "%d", &lineNum)
+
+				// Deduplicate
+				key := fmt.Sprintf("%s:%d", path, lineNum)
+				if !seen[key] {
+					refs = append(refs, FileReference{Path: path, Line: lineNum})
+					seen[key] = true
+				}
+			}
+		}
+	}
+	return refs
+}
+
+// normalizeContainerPath attempts to map container paths (e.g., /app/src) to host paths
+func normalizeContainerPath(cwd, path string) string {
+	path = strings.TrimPrefix(path, "/app/")
+	path = strings.TrimPrefix(path, "/workspace/")
+	return filepath.Join(cwd, path)
+}
+
+// ReadFileSnippets reads a window of lines around the error location
+func ReadFileSnippets(cwd string, refs []FileReference) string {
+	var sb strings.Builder
+	for _, ref := range refs {
+		localPath := normalizeContainerPath(cwd, ref.Path)
+
+		file, err := os.Open(localPath)
+		if err != nil {
+			continue // Skip if we can't find the file locally
+		}
+
+		scanner := bufio.NewScanner(file)
+		var lines []string
+		for scanner.Scan() {
+			lines = append(lines, scanner.Text())
+		}
+		file.Close()
+
+		// Calculate window (10 lines above and below)
+		start := ref.Line - 10
+		if start < 1 {
+			start = 1
+		}
+		end := ref.Line + 10
+		if end > len(lines) {
+			end = len(lines)
+		}
+
+		sb.WriteString(fmt.Sprintf("\n--- %s (Lines %d-%d) ---\n", ref.Path, start, end))
+		for i := start; i <= end; i++ {
+			prefix := "  "
+			if i == ref.Line {
+				prefix = ">>" // Highlight the exact error line
+			}
+			sb.WriteString(fmt.Sprintf("%s %4d | %s\n", prefix, i, lines[i-1]))
+		}
+	}
+	return sb.String()
+}
+
 func AnalyzeLogs(logContent string) (AnalysisResult, error) {
 	var result AnalysisResult
 
@@ -102,22 +190,39 @@ func AnalyzeLogs(logContent string) (AnalysisResult, error) {
 	}
 	defer client.Close()
 
-	systemPrompt := `You are an expert Principal Site Reliability Engineer (SRE) and DevOps Architect.
-Analyze the provided CI/CD pipeline/command failure logs within the context of the user's workspace.
-Identify the precise root cause and provide specific, actionable, and platform-appropriate fixes.
+	cwd, _ := os.Getwd()
+
+systemPrompt := fmt.Sprintf(`You are an expert Principal Site Reliability Engineer (SRE) and DevOps Architect.
+Analyze the provided CI/CD pipeline/command failure logs within the context of the user's workspace and the SOURCE CODE AT ERROR LOCATIONS section if present.
+
+ANTI-HALLUCINATION RULES — THESE OVERRIDE ALL OTHER INSTINCTS:
+1. Only reference file paths, line numbers, or code shown in the CODE CONTEXT or LOG sections below. Never invent a file path that wasn't explicitly shown to you.
+2. If you cannot identify the responsible file, say so explicitly instead of guessing.
+3. Quote exact error strings, exception class names, and exit codes from the log verbatim.
 
 Follow these strict rules for 'fix_commands':
-1. Tailor the shell commands to the host OS. If host OS is 'darwin' (macOS) and you suggest using 'sed -i', use the macOS-specific syntax: 'sed -i \'\'' ...'.
+1. The user's host OS is '%s'. You MUST tailor all shell commands to this OS.
+   - If 'windows', NEVER use 'sed', 'awk', or 'grep'. You MUST use native PowerShell commands. For text replacement, use: (Get-Content path) -replace 'old', 'new' | Set-Content path
+   - If 'darwin' (macOS), use macOS-specific sed syntax: 'sed -i "" ...'
+   - If 'linux', use standard GNU sed.
 2. Check if 'Is Git Repository' is true. If false, DO NOT suggest git commands like 'git push' or 'git commit'.
-3. For python requirements.txt changes, suggest simple text replacement or commands appropriate to modify the file directly, avoiding complex regex if possible.
-4. Keep commands concise, practical, and safe to execute.
+3. Keep commands concise, practical, and safe to execute.
+4. Never suggest destructive commands (rm -rf, sudo rm, DROP TABLE) unless the log explicitly shows corruption requiring it.
+5. If a command requires interactive manual input (e.g., entering passwords), explicitly document this in the 'suggestions' field.
+
+Assess the severity of the failure:
+- If the failure is a non-blocking linter warning or style issue that does not break compilation or testing, set 'severity' to 'warning' and 'ignorable' to true.
+- If it breaks compilation, testing, or deployment, set 'severity' to 'critical' and 'ignorable' to false.
 
 Respond with ONLY valid JSON in this exact structure:
 {
-  "root_cause": "string — precise explanation of the root cause",
-  "suggestions": ["string", "string"],
-  "fix_commands": ["string — exact command to run", "string"]
-}`
+  "root_cause": "string",
+  "confidence": "high | medium | low",
+  "suggestions": ["string"],
+  "fix_commands": ["string"],
+  "severity": "critical | warning | info",
+  "ignorable": true
+}`, runtime.GOOS)
 
 	workspaceContext := gatherWorkspaceContext()
 
@@ -126,13 +231,22 @@ Respond with ONLY valid JSON in this exact structure:
 		truncated = "...[truncated]\n" + truncated[len(truncated)-12000:]
 	}
 
-	userMessage := fmt.Sprintf("Workspace Context:\n%s\n\nFailed Pipeline Logs:\n%s", workspaceContext, truncated)
+	// Extract real file:line references and read the actual code snippets
+	refs := ExtractErrorLocations(logContent)
+	codeContext := ""
+	if len(refs) > 0 {
+		codeContext = "\n=== SOURCE CODE AT ERROR LOCATIONS ===\n" + ReadFileSnippets(cwd, refs)
+	}
+
+	userMessage := fmt.Sprintf("Workspace Context:\n%s%s\n\nFailed Pipeline Logs:\n%s",
+		workspaceContext, codeContext, truncated)
 
 	responseText, err := client.Complete(systemPrompt, userMessage)
 	if err != nil {
 		return result, fmt.Errorf("log analysis failed: %w", err)
 	}
 
+	// JSON parsing
 	cleaned := strings.TrimSpace(responseText)
 	cleaned = strings.TrimPrefix(cleaned, "```json")
 	cleaned = strings.TrimPrefix(cleaned, "```")
@@ -141,6 +255,7 @@ Respond with ONLY valid JSON in this exact structure:
 
 	type rawResult struct {
 		RootCause   string   `json:"root_cause"`
+		Confidence  string   `json:"confidence"`
 		Suggestions []string `json:"suggestions"`
 		FixCommands []string `json:"fix_commands"`
 	}
@@ -150,7 +265,8 @@ Respond with ONLY valid JSON in this exact structure:
 		return result, fmt.Errorf("AI returned invalid JSON: %w", err)
 	}
 
-	result.RootCause = raw.RootCause
+	// Format confidence into the root cause for CLI display
+	result.RootCause = fmt.Sprintf("[%s confidence] %s", strings.ToUpper(raw.Confidence), raw.RootCause)
 	result.Suggestions = raw.Suggestions
 	result.FixCommands = raw.FixCommands
 

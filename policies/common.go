@@ -20,25 +20,52 @@ var ignoreDirs = map[string]bool{
 	"vendor":       true,
 	"dist":         true,
 	"build":        true,
+	"k8s":          true,
 }
 
 // walkSourceFiles visits every non-directory file under root, skipping ignoreDirs.
 // The visitor receives the absolute path to each file. Errors from the visitor
 // are silently swallowed — policies must never panic.
+// walkSourceFiles visits every non-directory file under root, skipping ignoreDirs.
+// The visitor receives the absolute path to each file. Errors from the visitor
+// are silently swallowed — policies must never panic.
 func walkSourceFiles(root string, visitor func(path string)) {
-	filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return nil
-		}
-		if d.IsDir() {
-			if ignoreDirs[d.Name()] {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		visitor(path)
-		return nil
-	})
+    // Define extensions to explicitly skip (binary files, images, etc.)
+    ignoredExts := map[string]bool{
+        ".exe": true,
+        ".dll": true,
+        ".so":  true,
+        ".png": true,
+        ".jpg": true,
+        ".zip": true,
+    }
+
+    filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+        if err != nil {
+            return nil
+        }
+        
+        if d.IsDir() {
+            if ignoreDirs[d.Name()] {
+                return filepath.SkipDir
+            }
+            return nil
+        }
+
+        // Skip ignored file extensions to avoid reading compiled binaries
+        ext := strings.ToLower(filepath.Ext(d.Name()))
+        if ignoredExts[ext] {
+            return nil
+        }
+
+        // Skip the devsandbox binary itself on Linux/Mac where it lacks an extension
+        if d.Name() == "devsandbox" {
+            return nil
+        }
+
+        visitor(path)
+        return nil
+    })
 }
 
 // readLines reads a file line-by-line. Returns nil if the file cannot be opened.
