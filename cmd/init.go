@@ -20,11 +20,7 @@ var initCmd = &cobra.Command{
 	Short: "Initializes scaffolding for the detected framework",
 	Long:  `Detects the project framework in the current directory and generates scaffolding files and a pipeline.yaml starter.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		cwd, err := os.Getwd()
-		if err != nil {
-			fmt.Println("Error getting current directory:", err)
-			return
-		}
+		cwd := core.GetWorkspaceDir()
 
 		fmt.Println("\033[1;36mAnalyzing project structure and inferring configuration...\033[0m")
 

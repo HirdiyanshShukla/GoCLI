@@ -22,7 +22,7 @@ var runCmd = &cobra.Command{
 	Use:   "run",
 	Short: "Instantly syncs your Jenkinsfile, triggers a build, and tracks status live",
 	Run: func(cmd *cobra.Command, args []string) {
-		cwd, _ := os.Getwd()
+		cwd := core.GetWorkspaceDir()
 		// Guardrail -- must run from root
 		core.RequireProjectRoot(cwd)
 
@@ -406,7 +406,7 @@ func monitorKubernetesDeployment(appName string) {
 			logOutput2, _ := logCmd2.CombinedOutput()
 
 			if len(logOutput2) > 0 {
-				fmt.Println("\033[1;36mAnalyzing pod logs...\033[0m")
+				fmt.Println("\033[1;36m🤖 Analyzing pod logs...\033[0m")
 				analysis, err := ai.AnalyzeLogs(string(logOutput2))
 				if err == nil {
 					ai.PrintAnalysis(analysis)

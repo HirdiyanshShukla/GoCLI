@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"text/tabwriter"
 
+	"devsandbox/core"
 	"devsandbox/core/config"
 	"devsandbox/core/policy"
 	"devsandbox/policies"
@@ -27,7 +28,7 @@ var policyListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all available policies and their current status",
 	Run: func(cmd *cobra.Command, args []string) {
-		cwd, _ := os.Getwd()
+		cwd := core.GetWorkspaceDir()
 		cfg, err := config.LoadConfig(cwd)
 		if err != nil {
 			fmt.Printf("\033[1;31m❌ %s\033[0m\n", err.Error())
@@ -65,7 +66,7 @@ var policyCheckCmd = &cobra.Command{
 	Use:   "check",
 	Short: "Run policy checks against the current project",
 	Run: func(cmd *cobra.Command, args []string) {
-		cwd, _ := os.Getwd()
+		cwd := core.GetWorkspaceDir()
 		cfg, err := config.LoadConfig(cwd)
 		if err != nil {
 			fmt.Printf("\033[1;31m❌ %s\033[0m\n", err.Error())
@@ -114,7 +115,7 @@ var policyEnableCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		name := args[0]
-		cwd, _ := os.Getwd()
+		cwd := core.GetWorkspaceDir()
 
 		cfg, err := loadPipelineConfig(cwd)
 		if err != nil {
@@ -154,7 +155,7 @@ var policyDisableCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		name := args[0]
-		cwd, _ := os.Getwd()
+		cwd := core.GetWorkspaceDir()
 
 		// Validate the policy name exists in the registry
 		registry := policies.All()

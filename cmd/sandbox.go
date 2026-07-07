@@ -27,7 +27,7 @@ var prepCiCmd = &cobra.Command{
         clusterName := "ephemeral-test"
  
         // CURRENT PROJECT DIRECTORY
-        cwd, _ := os.Getwd()
+        cwd := core.GetWorkspaceDir()
 
         kindExists := kindClusterExists(clusterName)
         sandboxPorts, err := ports.ResolveSandboxPorts(cwd, kindExists)
@@ -186,7 +186,7 @@ var destroyCiCmd = &cobra.Command{
 			"--name", clusterName,
 		)
 
-		cwd, _ := os.Getwd()
+		cwd := core.GetWorkspaceDir()
 		ports.Clear(cwd)
 
 		fmt.Println("\n\033[1;32mInfrastructure destroyed safely.\033[0m")

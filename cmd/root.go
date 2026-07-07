@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	"devsandbox/core"
 	"github.com/spf13/cobra"
 )
 
@@ -13,11 +14,13 @@ var rootCmd = &cobra.Command{
 	Short: "DevSandbox — Your AI-powered local CI/CD CLI",
 	Long:  `DevSandbox is a local CI/CD pipeline and observability CLI tool powered by AI.`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		cwd, err := os.Getwd()
-		if err != nil {
-			fmt.Println("\033[1;31m\u274c Failed to determine current working directory.\033[0m")
-			os.Exit(1)
+		// The serve subcommand boots the web server from any directory;
+		// it doesn't need to be in a project root and temp workspace paths
+		// created by the server are always space-free.
+		if cmd.Name() == "serve" {
+			return
 		}
+		cwd := core.GetWorkspaceDir()
 		if strings.Contains(cwd, " ") {
 			fmt.Println("\033[1;31m\u274c Project path contains spaces, which are unsupported by the pipeline engine.\033[0m")
 			fmt.Printf("\U0001f449 Current path: %s\n", cwd)

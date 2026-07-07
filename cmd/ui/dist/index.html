@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OpsAI — Internal Developer Platform</title>
+  <meta name="description" content="OpsAI self-service developer platform: scaffold, containerize, and deploy your app with a single click." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter','system-ui','sans-serif'], mono: ['JetBrains Mono','monospace'] },
+          colors: {
+            brand: { 50:'#f0fdfa', 100:'#ccfbf1', 500:'#14b8a6', 600:'#0d9488', 900:'#134e4a' },
+            navy:  { 500:'#1e3a8a', 600:'#1e40af', 700:'#1d4ed8', 800:'#1e3a8a', 900:'#172554' }
+          },
+          animation: { 'fade-in':'fadeIn .3s ease both', 'slide-up':'slideUp .25s ease both' },
+          keyframes: {
+            fadeIn:  { '0%':{ opacity:0 }, '100%':{ opacity:1 } },
+            slideUp: { '0%':{ opacity:0, transform:'translateY(10px)' }, '100%':{ opacity:1, transform:'translateY(0)' } }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    *,*::before,*::after{box-sizing:border-box}
+    body{
+      background-color:#f8fafc;
+      font-family:'Inter',sans-serif;
+      color:#0f172a;
+      min-height:100vh;
+    }
+    
+    /* Clean Cards */
+    .card{background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,0.05)}
+    
+    /* Tab buttons */
+    .tab-btn{padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;color:#64748b;transition:all .2s;cursor:pointer;border:1px solid transparent;background:transparent}
+    .tab-btn:hover{color:#334155;background:#f1f5f9}
+    .tab-btn.active{color:#1e3a8a;background:#eff6ff;border-color:#bfdbfe}
+
+    /* Command buttons (Navy Theme) */
+    .cmd-btn{
+      display:flex;flex-direction:column;align-items:flex-start;gap:4px;
+      width:100%;padding:14px 16px;border-radius:10px;border:1px solid #e2e8f0;
+      background:#ffffff;cursor:pointer;text-align:left;
+      transition:all .2s;
+    }
+    .cmd-btn:hover{border-color:#1e3a8a;background:#f8fafc;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05),0 2px 4px -1px rgba(0,0,0,0.03);transform:translateY(-1px)}
+    .cmd-btn:active{transform:translateY(0)}
+    .cmd-btn.danger{border-color:#fca5a5}
+    .cmd-btn.danger:hover{border-color:#ef4444;background:#fef2f2}
+    .cmd-btn .cmd-icon{font-size:20px;line-height:1;margin-bottom:2px}
+    .cmd-btn .cmd-name{font-size:14px;font-weight:600;color:#0f172a}
+    .cmd-btn .cmd-cli{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#475569;margin-top:2px}
+    .cmd-btn .cmd-desc{font-size:12px;color:#64748b;line-height:1.4;margin-top:4px}
+    .cmd-btn:disabled{opacity:.5;cursor:not-allowed;transform:none!important;box-shadow:none!important}
+
+    /* Input Fields */
+    .input-field{width:100%;background:#ffffff;border:1px solid #cbd5e1;border-radius:8px;padding:10px 14px;font-size:13px;color:#0f172a;font-family:'JetBrains Mono',monospace;transition:all .2s;outline:none}
+    .input-field::placeholder{color:#94a3b8}
+    .input-field:focus{border-color:#1e3a8a;box-shadow:0 0 0 3px rgba(30,58,138,0.1)}
+
+    /* Action button */
+    .action-btn{background:#1e3a8a;border:1px solid #1e3a8a;border-radius:8px;color:#ffffff;font-size:13px;font-weight:600;padding:10px 20px;cursor:pointer;transition:all .2s;width:100%;margin-top:10px}
+    .action-btn:hover{background:#1e40af;transform:translateY(-1px)}
+    .action-btn:disabled{opacity:.6;cursor:not-allowed;transform:none}
+
+    /* Status badges */
+    .badge{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.05em}
+    .badge.idle{background:#f1f5f9;color:#64748b;border:1px solid #cbd5e1}
+    .badge.ready{background:#eff6ff;color:#1e3a8a;border:1px solid #bfdbfe}
+    .badge.running{background:#fef3c7;color:#d97706;border:1px solid #fde68a}
+    .badge.done{background:#dcfce7;color:#166534;border:1px solid #bbf7d0}
+    .badge.error{background:#fee2e2;color:#b91c1c;border:1px solid #fecaca}
+
+    /* Terminal (Dark for contrast) */
+    #console{font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.6;white-space:pre-wrap;word-break:break-all;padding:20px 24px;height:450px;overflow-y:auto;color:#f8fafc;background:#0f172a}
+    #console::-webkit-scrollbar{width:6px}
+    #console::-webkit-scrollbar-track{background:transparent}
+    #console::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.2);border-radius:3px}
+
+    /* ANSI colors mapped for dark terminal bg */
+    .a-red{color:#f87171}.a-green{color:#4ade80}.a-yellow{color:#facc15}
+    .a-blue{color:#60a5fa}.a-cyan{color:#2dd4bf}.a-magenta{color:#e879f9}
+    .a-white{color:#f1f5f9}.a-bold{font-weight:700}.a-dim{color:#64748b}
+
+    /* Floating Interactive Prompt Box */
+    #prompt-overlay{
+      position:absolute; bottom:30px; left:50%; transform:translateX(-50%);
+      background:#ffffff; border:1px solid #cbd5e1; border-radius:12px;
+      padding:16px 24px; box-shadow:0 10px 25px rgba(0,0,0,0.15);
+      display:none; flex-direction:column; align-items:center; gap:12px; z-index:50;
+      animation:slideUp .2s ease-out both;
+    }
+    #prompt-overlay.visible{display:flex}
+    .prompt-btn{padding:8px 24px;border-radius:6px;font-weight:600;font-size:14px;cursor:pointer;transition:all .15s}
+    .prompt-btn.yes{background:#1e3a8a;color:#fff;border:1px solid #1e3a8a}
+    .prompt-btn.yes:hover{background:#1e40af}
+    .prompt-btn.no{background:#ffffff;color:#64748b;border:1px solid #cbd5e1}
+    .prompt-btn.no:hover{background:#f1f5f9;color:#0f172a}
+  </style>
+</head>
+<body>
+
+  <div class="max-w-6xl mx-auto px-6 py-8">
+
+    <!-- ── Header ── -->
+    <header class="flex items-center justify-between mb-8 animate-fade-in">
+      <div class="flex items-center gap-4">
+        <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 bg-navy-800 text-white shadow-md">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+        </div>
+        <div>
+          <h1 class="text-xl font-bold text-slate-900 tracking-tight">OpsAI Dashboard</h1>
+          <p class="text-sm text-slate-500 mt-0.5">Self-Service Internal Developer Platform</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <span id="conn-badge" class="badge idle"><span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>IDLE</span>
+        <span id="ws-badge" class="badge ready hidden"><span class="w-1.5 h-1.5 rounded-full bg-navy-600"></span><span id="ws-badge-text">—</span></span>
+      </div>
+    </header>
+
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+
+      <!-- ── LEFT PANEL (1/4) — Workspace & Config ── -->
+      <div class="lg:col-span-1 flex flex-col gap-5">
+        
+        <!-- Workspace config -->
+        <section class="card p-5 animate-slide-up" style="animation-delay:.02s">
+          <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Target Workspace</h2>
+          
+          <div class="flex gap-1 p-1 bg-slate-100 rounded-lg mb-4">
+            <button class="tab-btn active flex-1" id="tab-local" onclick="switchTab('local')">📁 Local</button>
+            <button class="tab-btn flex-1" id="tab-zip"   onclick="switchTab('zip')">📦 ZIP</button>
+            <button class="tab-btn flex-1" id="tab-git"   onclick="switchTab('git')">🐙 Git</button>
+          </div>
+
+          <div id="panel-local" class="animate-fade-in text-sm text-slate-600 bg-slate-50 p-3 rounded-lg border border-slate-200">
+            Commands will execute in the directory where you ran <code>opsai serve</code>.
+          </div>
+
+          <div id="panel-zip" class="hidden animate-fade-in">
+            <div class="border-2 border-dashed border-slate-300 rounded-lg p-5 text-center cursor-pointer hover:bg-slate-50 transition-colors"
+                 id="drop-zone" onclick="document.getElementById('zipFile').click()"
+                 ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="handleDrop(event)">
+              <div class="text-2xl mb-1">📦</div>
+              <p class="text-sm font-semibold text-slate-700" id="drop-label">Drop .zip or browse</p>
+            </div>
+            <input type="file" id="zipFile" accept=".zip" class="hidden" onchange="onFileSelected(event)" />
+            <button class="action-btn" id="btn-zip" onclick="uploadZip()" disabled>Upload & Extract</button>
+          </div>
+
+          <div id="panel-git" class="hidden animate-fade-in">
+            <input type="text" id="gitUrl" class="input-field mb-2" placeholder="https://github.com/user/repo.git"
+                   oninput="document.getElementById('btn-git').disabled=!this.value.trim()" />
+            <button class="action-btn" id="btn-git" onclick="cloneGit()" disabled>Clone Repo</button>
+          </div>
+        </section>
+
+        <!-- API Key -->
+        <section class="card p-5 animate-slide-up" style="animation-delay:.04s">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Gemini API Key</h2>
+            <span id="key-badge" class="badge idle"><span class="w-1 h-1 rounded-full bg-slate-400"></span>UNSET</span>
+          </div>
+          <input type="password" id="geminiApiKey" class="input-field" placeholder="AIza..." autocomplete="off" oninput="onKeyInput(this.value)" />
+          <p class="text-xs text-slate-500 mt-2">Required for AI framework detection.</p>
+        </section>
+      </div>
+
+      <!-- ── RIGHT PANEL (3/4) — Commands & Terminal ── -->
+      <div class="lg:col-span-3 flex flex-col gap-5">
+        
+        <!-- Commands Grid -->
+        <section class="animate-slide-up" style="animation-delay:.06s">
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            
+            <button class="cmd-btn" id="btn-init" onclick="runCmd(['init'])">
+              <span class="cmd-icon">🔧</span>
+              <span class="cmd-name">Initialize</span>
+              <span class="cmd-cli">opsai init</span>
+            </button>
+
+            <button class="cmd-btn" id="btn-prep-ci" onclick="runCmd(['prep-ci'])">
+              <span class="cmd-icon">🚀</span>
+              <span class="cmd-name">Boot Sandbox</span>
+              <span class="cmd-cli">opsai prep-ci</span>
+            </button>
+
+            <button class="cmd-btn" id="btn-run" onclick="runCmd(['run'])" style="border-color:#1e3a8a; border-width:2px;">
+              <span class="cmd-icon">⚡</span>
+              <span class="cmd-name text-navy-800">Run Pipeline</span>
+              <span class="cmd-cli">opsai run</span>
+            </button>
+
+            <button class="cmd-btn" id="btn-validate" onclick="runCmd(['validate'])">
+              <span class="cmd-icon">✅</span>
+              <span class="cmd-name">Validate</span>
+              <span class="cmd-cli">opsai validate</span>
+            </button>
+
+            <button class="cmd-btn" id="btn-tunnel" onclick="runCmd(['tunnel'])">
+              <span class="cmd-icon">🚇</span>
+              <span class="cmd-name text-blue-600">Tunnel</span>
+              <span class="cmd-cli">opsai tunnel</span>
+            </button>
+
+            <button class="cmd-btn danger" id="btn-destroy" onclick="runCmd(['destroy-ci'])">
+              <span class="cmd-icon">💣</span>
+              <span class="cmd-name text-red-600">Destroy CI</span>
+              <span class="cmd-cli">opsai destroy-ci</span>
+            </button>
+
+          </div>
+        </section>
+
+        <!-- Terminal Box -->
+        <section class="card overflow-hidden relative animate-slide-up" style="animation-delay:.08s; border-color:#cbd5e1;">
+          
+          <div class="flex items-center justify-between px-4 py-2 bg-slate-100 border-b border-slate-200">
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-red-400"></span>
+              <span class="w-2.5 h-2.5 rounded-full bg-yellow-400"></span>
+              <span class="w-2.5 h-2.5 rounded-full bg-green-400"></span>
+              <span class="text-xs font-mono text-slate-500 ml-2" id="term-title">terminal</span>
+            </div>
+            <div class="flex items-center gap-4">
+              <button id="btn-stop" onclick="stopCmd()" class="hidden text-xs font-bold text-red-600 hover:text-red-700 transition-colors flex items-center gap-1">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/></svg>
+                Stop (Ctrl+C)
+              </button>
+              <button onclick="clearConsole()" class="text-xs font-semibold text-slate-500 hover:text-slate-800 transition-colors">Clear</button>
+            </div>
+          </div>
+          
+          <!-- The console output -->
+          <pre id="console"><span class="a-dim">Select a workspace and run a command above.\n</span></pre>
+
+          <!-- Floating Interactive Prompt -->
+          <div id="prompt-overlay">
+            <p class="text-sm font-semibold text-slate-800 m-0 p-0">The command is waiting for your input.</p>
+            <div class="flex gap-3">
+              <button class="prompt-btn no" onclick="sendInput('n\n')">No (Skip)</button>
+              <button class="prompt-btn yes" onclick="sendInput('y\n')">Yes (Proceed)</button>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ── State ──────────────────────────────────────────────────────────────
+    let currentWorkspaceId = '';
+    let activeSocket       = null;
+
+    // ── Tab switching ──────────────────────────────────────────────────────
+    function switchTab(tab) {
+      ['local','zip','git'].forEach(t => {
+        document.getElementById(`panel-${t}`).classList.add('hidden');
+        document.getElementById(`tab-${t}`).classList.remove('active');
+      });
+      document.getElementById(`panel-${tab}`).classList.remove('hidden');
+      document.getElementById(`tab-${tab}`).classList.add('active');
+      if (tab === 'local') { currentWorkspaceId = ''; updateWsBadge('', ''); }
+    }
+
+    // ── Drag & Drop ────────────────────────────────────────────────────────
+    function dragOver(e) { e.preventDefault(); document.getElementById('drop-zone').classList.add('bg-slate-100'); }
+    function dragLeave() { document.getElementById('drop-zone').classList.remove('bg-slate-100'); }
+    function handleDrop(e) {
+      e.preventDefault(); dragLeave();
+      const file = e.dataTransfer.files[0];
+      if (!file || !file.name.endsWith('.zip')) return alert('Please drop a .zip file.');
+      const dt = new DataTransfer(); dt.items.add(file);
+      document.getElementById('zipFile').files = dt.files;
+      onFileSelected({ target: { files: [file] } });
+    }
+    function onFileSelected(e) {
+      const file = e.target.files[0]; if (!file) return;
+      document.getElementById('drop-label').textContent = file.name;
+      document.getElementById('btn-zip').disabled = false;
+    }
+
+    // ── Upload / Clone ─────────────────────────────────────────────────────
+    async function uploadZip() {
+      const file = document.getElementById('zipFile').files[0]; if (!file) return;
+      const btn = document.getElementById('btn-zip');
+      btn.disabled = true; btn.textContent = 'Extracting...';
+      try {
+        const fd = new FormData(); fd.append('projectZip', file);
+        const res  = await fetch('/api/upload', { method:'POST', body:fd });
+        if (!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        currentWorkspaceId = data.workspaceId;
+        updateWsBadge(data.workspaceId, 'ready');
+        btn.textContent = 'Uploaded';
+        appendLog(`\x1b[1;32m✅ Workspace ready: ${data.workspaceId}\x1b[0m\n`);
+      } catch(err) {
+        alert(err.message); btn.textContent = 'Upload'; btn.disabled = false;
+      }
+    }
+    async function cloneGit() {
+      const url = document.getElementById('gitUrl').value.trim(); if (!url) return;
+      const btn = document.getElementById('btn-git');
+      btn.disabled = true; btn.textContent = 'Cloning...';
+      try {
+        const res  = await fetch('/api/clone', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ repo_url:url }) });
+        if (!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        currentWorkspaceId = data.workspaceId;
+        updateWsBadge(data.workspaceId, 'ready');
+        btn.textContent = 'Cloned';
+        appendLog(`\x1b[1;32m✅ Git cloned: ${data.workspaceId}\x1b[0m\n`);
+      } catch(err) {
+        alert(err.message); btn.textContent = 'Clone'; btn.disabled = false;
+      }
+    }
+
+    // ── API Key Storage ────────────────────────────────────────────────────
+    window.addEventListener('DOMContentLoaded', () => {
+      const saved = sessionStorage.getItem('opsai_gemini_key');
+      if (saved) { document.getElementById('geminiApiKey').value = saved; onKeyInput(saved); }
+    });
+    function onKeyInput(val) {
+      const t = val.trim();
+      const b = document.getElementById('key-badge');
+      if (t) { sessionStorage.setItem('opsai_gemini_key', t); b.className='badge ready'; b.innerHTML='<span class="w-1 h-1 rounded-full bg-navy-600"></span>SET'; }
+      else   { sessionStorage.removeItem('opsai_gemini_key'); b.className='badge idle'; b.innerHTML='<span class="w-1 h-1 rounded-full bg-slate-400"></span>UNSET'; }
+    }
+
+    // ── WebSocket Execution ────────────────────────────────────────────────
+    function runCmd(cmdArgs) {
+      if (activeSocket) { activeSocket.close(); activeSocket = null; }
+      hidePrompt();
+      clearConsole();
+      document.getElementById('term-title').textContent = `opsai ${cmdArgs.join(' ')}`;
+      setConnBadge('running'); setAllBtnsDisabled(true);
+      document.getElementById('btn-stop').classList.remove('hidden');
+
+      const wsUrl = `ws://${window.location.host}/ws?workspace=${encodeURIComponent(currentWorkspaceId)}`;
+      activeSocket = new WebSocket(wsUrl);
+
+      activeSocket.onopen = () => {
+        activeSocket.send(JSON.stringify({ command: cmdArgs, gemini_api_key: document.getElementById('geminiApiKey').value.trim() }));
+      };
+      
+      activeSocket.onmessage = (e) => {
+        appendLog(e.data);
+        // Detect interactive prompt "(y/N)" or "[y/N]" at the end of output
+        const text = e.data.trim();
+        if (text.endsWith('(y/N):') || text.endsWith('[y/N]:') || text.endsWith('(y/n):') || text.endsWith('[y/n]:') || text.endsWith('[Y/n]:')) {
+          showPrompt();
+        }
+      };
+
+      activeSocket.onclose = () => {
+        setConnBadge('done'); setAllBtnsDisabled(false); hidePrompt();
+        document.getElementById('btn-stop').classList.add('hidden');
+        activeSocket = null;
+      };
+    }
+
+    function stopCmd() {
+      if (activeSocket) {
+        appendLog(`\n\x1b[33m⚡ Sending interrupt (Ctrl+C)...\x1b[0m\n`);
+        activeSocket.close();
+      }
+    }
+
+    function sendInput(charStr) {
+      if (!activeSocket) return;
+      activeSocket.send(JSON.stringify({ input: charStr }));
+      appendLog(charStr); // echo to terminal
+      hidePrompt();
+    }
+
+    // ── UI Helpers ─────────────────────────────────────────────────────────
+    function showPrompt() { document.getElementById('prompt-overlay').classList.add('visible'); }
+    function hidePrompt() { document.getElementById('prompt-overlay').classList.remove('visible'); }
+    
+    function setAllBtnsDisabled(disabled) {
+      ['btn-init','btn-prep-ci','btn-run','btn-validate','btn-tunnel','btn-destroy'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.disabled = disabled;
+      });
+    }
+
+    function setConnBadge(state) {
+      const b = document.getElementById('conn-badge');
+      if(state==='running') { b.className='badge running'; b.innerHTML='<span class="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse"></span>RUNNING'; }
+      if(state==='done')    { b.className='badge done'; b.innerHTML='<span class="w-1.5 h-1.5 rounded-full bg-green-600"></span>DONE'; }
+      if(state==='error')   { b.className='badge error'; b.innerHTML='<span class="w-1.5 h-1.5 rounded-full bg-red-600"></span>ERROR'; }
+    }
+    function updateWsBadge(id, state) {
+      const b = document.getElementById('ws-badge');
+      if (!id) { b.classList.add('hidden'); return; }
+      b.classList.remove('hidden');
+      document.getElementById('ws-badge-text').textContent = id;
+    }
+
+    // ── ANSI Parser ────────────────────────────────────────────────────────
+    const ANSI_MAP = {
+      '0':null,'1':'a-bold','2':'a-dim',
+      '31':'a-red','32':'a-green','33':'a-yellow','34':'a-blue','35':'a-magenta','36':'a-cyan','37':'a-white',
+      '90':'a-dim',
+      '1;31':'a-bold a-red','1;32':'a-bold a-green','1;33':'a-bold a-yellow',
+      '1;34':'a-bold a-blue','1;35':'a-bold a-magenta','1;36':'a-bold a-cyan','1;37':'a-bold a-white',
+    };
+    function parseAnsi(raw) {
+      let result='', depth=0;
+      const parts = raw.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').split(/\x1b\[/);
+      result += parts[0];
+      for (let i=1; i<parts.length; i++) {
+        const m = parts[i].match(/^([0-9;]*)m([\s\S]*)$/);
+        if (!m) { result += parts[i]; continue; }
+        const code=m[1], text=m[2];
+        if (code===''||code==='0') { result += '</span>'.repeat(depth); depth=0; }
+        else { const cls=ANSI_MAP[code]; if(cls){ result+=`<span class="${cls}">`;depth++;} }
+        result += text;
+      }
+      return result + '</span>'.repeat(depth);
+    }
+    function appendLog(raw) {
+      const el=document.getElementById('console');
+      const sp=document.createElement('span');
+      sp.innerHTML=parseAnsi(raw);
+      el.appendChild(sp);
+      el.scrollTop=el.scrollHeight;
+    }
+    function clearConsole() { document.getElementById('console').innerHTML=''; }
+  </script>
+</body>
+</html>

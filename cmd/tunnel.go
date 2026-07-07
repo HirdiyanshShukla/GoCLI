@@ -10,6 +10,7 @@ import (
 	"strings"
 	"syscall"
 
+	"devsandbox/core"
 	"github.com/spf13/cobra"
 )
 
@@ -17,7 +18,7 @@ var tunnelCmd = &cobra.Command{
 	Use:   "tunnel",
 	Short: "Opens a secure port-forward tunnel to your deployed application",
 	Run: func(cmd *cobra.Command, args []string) {
-		cwd, _ := os.Getwd()
+		cwd := core.GetWorkspaceDir()
 		rawName := filepath.Base(cwd)
 		appName := strings.ToLower(rawName)
 		appName = strings.ReplaceAll(appName, "_", "-")

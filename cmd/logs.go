@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"devsandbox/core"
 	"devsandbox/core/ai"
 
 	"github.com/spf13/cobra"
@@ -39,17 +40,16 @@ var logsAnalyzeCmd = &cobra.Command{
 			stat, err := os.Stdin.Stat()
 			if err == nil && (stat.Mode()&os.ModeCharDevice) != 0 {
 				// We are in an interactive terminal. Attempt to auto-fetch from Jenkins.
-				cwd, err := os.Getwd()
-				if err == nil {
-					rawName := filepath.Base(cwd)
-					appName := strings.ToLower(rawName)
-					appName = strings.ReplaceAll(appName, "_", "-")
-					appName = strings.ReplaceAll(appName, " ", "-")
+				cwd := core.GetWorkspaceDir()
+				rawName := filepath.Base(cwd)
+				appName := strings.ToLower(rawName)
+				appName = strings.ReplaceAll(appName, "_", "-")
+				appName = strings.ReplaceAll(appName, " ", "-")
 
-					fmt.Printf("\033[1;36mAttempting to auto-fetch latest logs from local Jenkins for '%s'...\033[0m\n", appName)
-					url := fmt.Sprintf("%s/job/%s/lastBuild/consoleText", loadSandboxPorts().JenkinsURL(), appName)
-					req, err := http.NewRequest("GET", url, nil)
-					if err == nil {
+				fmt.Printf("\033[1;36mAttempting to auto-fetch latest logs from local Jenkins for '%s'...\033[0m\n", appName)
+				url := fmt.Sprintf("%s/job/%s/lastBuild/consoleText", loadSandboxPorts().JenkinsURL(), appName)
+				req, err := http.NewRequest("GET", url, nil)
+				if err == nil {
 						req.SetBasicAuth("admin", "admin")
 						client := &http.Client{Timeout: 5 * time.Second}
 						resp, err := client.Do(req)
@@ -62,7 +62,6 @@ var logsAnalyzeCmd = &cobra.Command{
 							}
 						}
 					}
-				}
 
 				// If auto-fetch failed or wasn't possible, fall back to manual copy-paste
 				if len(logContent) == 0 {

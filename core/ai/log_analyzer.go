@@ -50,9 +50,9 @@ func PrintAnalysis(result AnalysisResult) {
 
 // gatherWorkspaceContext gathers files, git repo status, and dependency metadata for Gemini.
 func gatherWorkspaceContext() string {
-	cwd, err := os.Getwd()
-	if err != nil {
-		return "Unknown workspace directory"
+	cwd := os.Getenv("OPSAI_WORKSPACE_DIR")
+	if cwd == "" {
+		cwd, _ = os.Getwd()
 	}
 
 	var builder strings.Builder
@@ -190,7 +190,10 @@ func AnalyzeLogs(logContent string) (AnalysisResult, error) {
 	}
 	defer client.Close()
 
-	cwd, _ := os.Getwd()
+	cwd := os.Getenv("OPSAI_WORKSPACE_DIR")
+	if cwd == "" {
+		cwd, _ = os.Getwd()
+	}
 
 systemPrompt := fmt.Sprintf(`You are an expert Principal Site Reliability Engineer (SRE) and DevOps Architect.
 Analyze the provided CI/CD pipeline/command failure logs within the context of the user's workspace and the SOURCE CODE AT ERROR LOCATIONS section if present.

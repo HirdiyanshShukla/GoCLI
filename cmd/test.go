@@ -42,7 +42,7 @@ var validateCmd = &cobra.Command{
 		securityOK := securityScan()
 
 		fmt.Println("\n\033[1;34m\u26a0\ufe0f  Stage 6: Evaluating Platform Policies...\033[0m")
-		cwd, _ := os.Getwd()
+		cwd := core.GetWorkspaceDir()
 		cfg, cfgErr := config.LoadConfig(cwd)
 		policyFailed := false
 		if cfgErr != nil {
@@ -131,7 +131,7 @@ func getTestImage(cwd, ecosystem string) (image string, isMaven bool, isGradle b
 }
 
 func lintCode() bool {
-	cwd, _ := os.Getwd()
+	cwd := core.GetWorkspaceDir()
 	ecosystem := detector.DetectEcosystem(cwd)
 	appName := core.SanitizeForDocker(filepath.Base(cwd))
 
@@ -208,7 +208,7 @@ func findDjangoEntry(cwd string) string {
 }
 
 func unitTests() bool {
-	cwd, _ := os.Getwd()
+	cwd := core.GetWorkspaceDir()
 	ecosystem := detector.DetectEcosystem(cwd)
 	appName := core.SanitizeForDocker(filepath.Base(cwd))
 
@@ -306,7 +306,7 @@ func runCustomTestCommand(cwd string) bool {
 
 func lintDocker() bool {
 	project := core.AnalyzeProject()
-	cwd, _ := os.Getwd()
+	cwd := core.GetWorkspaceDir()
 	if project["has_docker"] {
 		return core.ExecCommandTracked("Hadolint Docker Check", "docker", "run", "--rm", "-v", fmt.Sprintf("%s:/work", core.ToDockerPath(cwd)), "-w", "/work", "hadolint/hadolint", "hadolint", "--ignore", "DL3018", "Dockerfile")
 	}
@@ -316,7 +316,7 @@ func lintDocker() bool {
 
 func lintK8s() bool {
 	project := core.AnalyzeProject()
-	cwd, _ := os.Getwd()
+	cwd := core.GetWorkspaceDir()
 	if project["has_k8s"] {
 		overlayPath := filepath.Join(cwd, "k8s/overlays/local")
 		if _, err := os.Stat(overlayPath); os.IsNotExist(err) {

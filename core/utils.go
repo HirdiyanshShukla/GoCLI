@@ -261,6 +261,19 @@ func RequireProjectRoot(cwd string) {
 	}
 }
 
+// GetWorkspaceDir returns the effective project workspace directory.
+// When the CLI is launched as a subprocess by the web server (opsai serve),
+// the server injects OPSAI_WORKSPACE_DIR so the child process operates on the
+// correct isolated temp directory rather than the server's own working directory.
+// Falls back to os.Getwd() for all normal terminal invocations.
+func GetWorkspaceDir() string {
+	if dir := os.Getenv("OPSAI_WORKSPACE_DIR"); dir != "" {
+		return dir
+	}
+	cwd, _ := os.Getwd()
+	return cwd
+}
+
 // --- HELPERS FOR SANDBOX 2.GO ---
 
 var trackedTempFiles []string
